@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        spring-boot-starter-parent gives us:
+          1. A dependency-management section that pins compatible versions for every
+             Spring library, Hibernate, Jackson, the Postgres driver, etc. That is why
+             most <dependency> blocks below have no <version> tag.
+          2. Sensible plugin defaults (compiler, resources, spring-boot-maven-plugin).
+        Laravel comparison: this is roughly what composer.json + the framework's own
+        version constraints do for you, except the whole compatible set is curated.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.16</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.misl</groupId>
+    <artifactId>leave-tracker</artifactId>
+    <version>1.0.0</version>
+    <name>employee-leave-tracker</name>
+    <description>Employee Leave Tracker - MISL Fresher Assessment</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <jjwt.version>0.12.6</jjwt.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- Spring MVC + embedded Tomcat + Jackson (JSON). Gives us @RestController. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Data JPA + Hibernate + HikariCP connection pool. Gives us JpaRepository. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Spring Security: the filter chain, BCryptPasswordEncoder, @PreAuthorize. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Bean Validation (Jakarta Validation + Hibernate Validator).
+             Gives us @NotBlank, @Email, @Size and the @Valid trigger. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- PostgreSQL JDBC driver. Needed only at runtime, not at compile time. -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+            JJWT - the JWT library. It is deliberately split into three artifacts:
+              jjwt-api     compile-time interfaces (the only one we import)
+              jjwt-impl    the runtime implementation
+              jjwt-jackson runtime JSON serializer for the token payload
+            Only jjwt-api is on the compile classpath, so our code cannot accidentally
+            depend on internal implementation classes.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Packages the app as an executable fat JAR containing Tomcat. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

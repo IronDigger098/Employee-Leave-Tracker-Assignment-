@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: employee-leave-tracker
+
+  # Every value uses the ${ENV_VAR:default} form.
+  # - Inside Docker, docker-compose injects the env vars and the host is `db`.
+  # - Running locally with `mvn spring-boot:run`, the defaults point at localhost.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/leave_tracker}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # `update` lets Hibernate create/alter the tables from the @Entity classes at
+      # startup, so the grader needs zero migration steps. In a production system you
+      # would use `validate` plus Flyway migrations - worth saying out loud in the interview.
+      ddl-auto: update
+    # Log the SQL Hibernate generates. Useful while learning, and useful for the demo:
+    # you can literally show the SELECT that a REST call produced.
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    # Turn OFF the "open session in view" pattern.
+    # With it ON (the Spring Boot default), the Hibernate session stays open until the
+    # HTTP response is written, which hides LazyInitializationException bugs and holds a
+    # DB connection for the whole request. With it OFF, every lazy association must be
+    # resolved inside a @Transactional service method - which is where it belongs.
+    open-in-view: false
+
+server:
+  port: 8080
+
+# Custom application properties, bound in JwtService via @Value.
+app:
+  jwt:
+    # DEVELOPMENT DEFAULT ONLY - overridden by the JWT_SECRET env var in docker-compose.
+    # HS256 requires a key of at least 256 bits (32 bytes); this string is comfortably longer.
+    secret: ${JWT_SECRET:dev-only-secret-change-me-in-production-0123456789abcdef}
+    # 24 hours in milliseconds.
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+logging:
+  level:
+    com.misl.leavetracker: DEBUG
