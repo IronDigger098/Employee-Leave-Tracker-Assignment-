@@ -1,0 +1,67 @@
+<h1 class="page-title">Apply for Leave</h1>
+<p class="page-subtitle">Your request will be submitted as PENDING for admin review</p>
+
+<div class="card" style="max-width: 640px">
+  @if (errorMessage()) {
+    <div class="alert alert-error">{{ errorMessage() }}</div>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <div class="field">
+      <label for="leaveType">Leave Type</label>
+      <select id="leaveType" formControlName="leaveType">
+        <!-- Options come from LEAVE_TYPES, which mirrors the LeaveType enum -->
+        @for (type of leaveTypes; track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </select>
+      @if (serverError('leaveType')) {
+        <small class="field-error">{{ serverError('leaveType') }}</small>
+      }
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="startDate">Start Date</label>
+        <input id="startDate" type="date" formControlName="startDate" [min]="today" />
+        @if (hasError('startDate')) {
+          <small class="field-error">Start date is required</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="endDate">End Date</label>
+        <input id="endDate" type="date" formControlName="endDate" [min]="today" />
+        @if (hasError('endDate')) {
+          <small class="field-error">End date is required</small>
+        }
+      </div>
+    </div>
+
+    <!--
+      The cross-field error lives on the form group, not on either input, so it
+      is shown once beneath both date fields rather than twice.
+    -->
+    @if (dateRangeInvalid) {
+      <div class="alert alert-error">End date must not be before start date.</div>
+    }
+
+    <div class="field">
+      <label for="reason">Reason</label>
+      <textarea id="reason" rows="4" formControlName="reason"></textarea>
+      @if (hasError('reason')) {
+        <small class="field-error">Reason is required (max 500 characters)</small>
+      }
+      @if (serverError('reason')) {
+        <small class="field-error">{{ serverError('reason') }}</small>
+      }
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary" [disabled]="submitting()">
+        {{ submitting() ? 'Submitting...' : 'Submit Request' }}
+      </button>
+      <button type="button" class="btn btn-secondary" (click)="cancel()">Cancel</button>
+    </div>
+  </form>
+</div>

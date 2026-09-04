@@ -1,0 +1,172 @@
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Employees</h1>
+    <p class="page-subtitle">Create, update and remove staff records</p>
+  </div>
+  @if (!formVisible()) {
+    <button type="button" class="btn btn-primary" (click)="startCreate()">Add Employee</button>
+  }
+</div>
+
+@if (successMessage()) {
+  <div class="alert alert-success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert alert-error">{{ errorMessage() }}</div>
+}
+
+<!-- ---------- create / edit form ---------- -->
+@if (formVisible()) {
+  <div class="card" style="margin-bottom: 24px">
+    <h2 class="page-title" style="font-size: 18px">
+      {{ editingId() ? 'Edit Employee' : 'New Employee' }}
+    </h2>
+
+    <form [formGroup]="form" (ngSubmit)="save()">
+      <div class="field-row">
+        <div class="field">
+          <label for="employeeCode">Employee Code</label>
+          <input id="employeeCode" type="text" formControlName="employeeCode" />
+          @if (hasError('employeeCode')) {
+            <small class="field-error">Employee code is required (max 20 characters)</small>
+          }
+          @if (serverError('employeeCode')) {
+            <small class="field-error">{{ serverError('employeeCode') }}</small>
+          }
+        </div>
+
+        <div class="field">
+          <label for="name">Full Name</label>
+          <input id="name" type="text" formControlName="name" />
+          @if (hasError('name')) {
+            <small class="field-error">Name is required</small>
+          }
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" formControlName="email" />
+          @if (hasError('email')) {
+            <small class="field-error">Enter a valid email address</small>
+          }
+          @if (serverError('email')) {
+            <small class="field-error">{{ serverError('email') }}</small>
+          }
+        </div>
+
+        <div class="field">
+          <label for="password">
+            Password
+            @if (editingId()) {
+              <span class="muted">(leave blank to keep current)</span>
+            }
+          </label>
+          <input id="password" type="password" formControlName="password" autocomplete="new-password" />
+          @if (hasError('password')) {
+            <small class="field-error">Password must be at least 6 characters</small>
+          }
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="department">Department</label>
+          <input id="department" type="text" formControlName="department" />
+          @if (hasError('department')) {
+            <small class="field-error">Department is required</small>
+          }
+        </div>
+
+        <div class="field">
+          <label for="designation">Designation</label>
+          <input id="designation" type="text" formControlName="designation" />
+          @if (hasError('designation')) {
+            <small class="field-error">Designation is required</small>
+          }
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="role">Role</label>
+          <select id="role" formControlName="role">
+            <option value="EMPLOYEE">EMPLOYEE</option>
+            <option value="ADMIN">ADMIN</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="active">Status</label>
+          <select id="active" formControlName="active">
+            <option [value]="true">Active</option>
+            <option [value]="false">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving...' : 'Save' }}
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="cancel()">Cancel</button>
+      </div>
+    </form>
+  </div>
+}
+
+<!-- ---------- employee table ---------- -->
+@if (loading()) {
+  <p class="muted">Loading employees...</p>
+} @else {
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Department</th>
+          <th>Designation</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!--
+          @for requires a `track` expression. It tells Angular how to identify a
+          row across re-renders, so after a reload it updates changed rows instead
+          of destroying and rebuilding the whole table. The id is the natural key.
+        -->
+        @for (employee of employees(); track employee.id) {
+          <tr>
+            <td>{{ employee.employeeCode }}</td>
+            <td>{{ employee.name }}</td>
+            <td>{{ employee.email }}</td>
+            <td>{{ employee.department }}</td>
+            <td>{{ employee.designation }}</td>
+            <td>{{ employee.role }}</td>
+            <td>{{ employee.active ? 'Active' : 'Inactive' }}</td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="btn btn-secondary btn-sm" (click)="startEdit(employee)">
+                  Edit
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" (click)="remove(employee)">
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <!-- @empty renders when the collection has no items -->
+          <tr>
+            <td colspan="8" class="empty-state">No employees yet.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

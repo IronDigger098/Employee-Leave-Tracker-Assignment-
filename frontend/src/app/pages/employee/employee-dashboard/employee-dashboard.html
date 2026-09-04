@@ -1,0 +1,32 @@
+<h1 class="page-title">My Dashboard</h1>
+<p class="page-subtitle">Welcome back, {{ user()?.name }}</p>
+
+@if (loading()) {
+  <p class="muted">Loading...</p>
+} @else if (errorMessage()) {
+  <div class="alert alert-error">{{ errorMessage() }}</div>
+} @else if (stats(); as s) {
+  <div class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-label">My Requests</span>
+      <span class="stat-value">{{ s.totalLeaves }}</span>
+    </div>
+    <div class="stat-card stat-pending">
+      <span class="stat-label">Pending</span>
+      <span class="stat-value">{{ s.pendingLeaves }}</span>
+    </div>
+    <div class="stat-card stat-approved">
+      <span class="stat-label">Approved</span>
+      <span class="stat-value">{{ s.approvedLeaves }}</span>
+    </div>
+    <div class="stat-card stat-rejected">
+      <span class="stat-label">Rejected</span>
+      <span class="stat-value">{{ s.rejectedLeaves }}</span>
+    </div>
+  </div>
+
+  <div class="quick-links">
+    <a class="btn btn-primary" routerLink="/employee/leaves/new">Apply for Leave</a>
+    <a class="btn btn-secondary" routerLink="/employee/leaves">View My Requests</a>
+  </div>
+}

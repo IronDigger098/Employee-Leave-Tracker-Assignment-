@@ -1,0 +1,29 @@
+<!--
+  @if / @for are Angular's built-in control flow, introduced in v17. They replace
+  *ngIf and *ngFor, need no CommonModule import, and are checked by the compiler.
+-->
+@if (user(); as currentUser) {
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <span class="navbar-brand">Employee Leave Tracker</span>
+
+      <div class="navbar-links">
+        @if (isAdmin()) {
+          <a routerLink="/admin/dashboard" routerLinkActive="active">Dashboard</a>
+          <a routerLink="/admin/employees" routerLinkActive="active">Employees</a>
+          <a routerLink="/admin/leaves" routerLinkActive="active">Leave Requests</a>
+        } @else {
+          <a routerLink="/employee/dashboard" routerLinkActive="active">Dashboard</a>
+          <a routerLink="/employee/leaves" routerLinkActive="active">My Leaves</a>
+          <a routerLink="/employee/leaves/new" routerLinkActive="active">Apply</a>
+        }
+      </div>
+
+      <div class="navbar-user">
+        <span class="navbar-name">{{ currentUser.name }}</span>
+        <span class="badge badge-role">{{ currentUser.role }}</span>
+        <button type="button" class="btn btn-ghost" (click)="logout()">Logout</button>
+      </div>
+    </div>
+  </nav>
+}

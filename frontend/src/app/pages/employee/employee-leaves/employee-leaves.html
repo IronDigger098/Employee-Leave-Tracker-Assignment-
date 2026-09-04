@@ -1,0 +1,65 @@
+<div class="page-header">
+  <div>
+    <h1 class="page-title">My Leave Requests</h1>
+    <p class="page-subtitle">Your applications and their current status</p>
+  </div>
+  <a class="btn btn-primary" routerLink="/employee/leaves/new">Apply for Leave</a>
+</div>
+
+@if (successMessage()) {
+  <div class="alert alert-success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert alert-error">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <p class="muted">Loading your requests...</p>
+} @else {
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th>Applied</th>
+          <th>Reviewed</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (leave of leaves(); track leave.id) {
+          <tr>
+            <td>{{ leave.leaveType }}</td>
+            <td>{{ leave.startDate | date: 'mediumDate' }}</td>
+            <td>{{ leave.endDate | date: 'mediumDate' }}</td>
+            <td>{{ leave.reason }}</td>
+            <td>
+              <span class="badge badge-{{ leave.status }}">{{ leave.status }}</span>
+            </td>
+            <td>{{ leave.createdAt | date: 'short' }}</td>
+            <td>{{ leave.reviewedAt ? (leave.reviewedAt | date: 'short') : '—' }}</td>
+            <td>
+              @if (leave.status === 'PENDING') {
+                <button type="button" class="btn btn-danger btn-sm" (click)="withdraw(leave)">
+                  Withdraw
+                </button>
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="empty-state">
+              You have not applied for any leave yet.
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

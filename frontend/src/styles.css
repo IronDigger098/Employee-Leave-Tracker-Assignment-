@@ -1,0 +1,451 @@
+/* ==========================================================================
+   Global styles.
+
+   Plain CSS on purpose - no Bootstrap, no Tailwind. The UI needed here is a
+   navbar, some cards, tables and forms; a framework would add a dependency and
+   a build step to explain for very little gain, and the assignment explicitly
+   says not to spend excessive time on visual design.
+
+   Custom properties (the --variables below) keep colours in one place, so the
+   whole palette can change from a single block.
+   ========================================================================== */
+
+:root {
+  --color-bg: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-border: #dfe3e8;
+  --color-text: #1f2933;
+  --color-muted: #6b7684;
+
+  --color-primary: #1f4e79;
+  --color-primary-dark: #163a5a;
+
+  --color-pending: #b7791f;
+  --color-pending-bg: #fdf3e0;
+  --color-approved: #237a48;
+  --color-approved-bg: #e6f4ec;
+  --color-rejected: #b3261e;
+  --color-rejected-bg: #fdeceb;
+
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ---------- layout ---------- */
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.page-title {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+/* ---------- navbar ---------- */
+
+.navbar {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.navbar-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.navbar-brand {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.navbar-links a {
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+.navbar-links a:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* routerLinkActive adds this class to the link matching the current URL. */
+.navbar-links a.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.navbar-name {
+  font-size: 14px;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+/* ---------- stat grid ---------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.stat-pending {
+  border-left-color: var(--color-pending);
+}
+.stat-approved {
+  border-left-color: var(--color-approved);
+}
+.stat-rejected {
+  border-left-color: var(--color-rejected);
+}
+
+.quick-links {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-block;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: #eef1f4;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 5px 12px;
+}
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-success {
+  background: var(--color-approved);
+  color: #fff;
+}
+.btn-danger {
+  background: var(--color-rejected);
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+}
+
+/* ---------- forms ---------- */
+
+.field {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--color-text);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid rgba(31, 78, 121, 0.35);
+  outline-offset: 0;
+  border-color: var(--color-primary);
+}
+
+.field-error {
+  color: var(--color-rejected);
+  font-size: 13px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 16px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* ---------- alerts ---------- */
+
+.alert {
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.alert-error {
+  background: var(--color-rejected-bg);
+  color: var(--color-rejected);
+  border: 1px solid #f3c9c6;
+}
+
+.alert-success {
+  background: var(--color-approved-bg);
+  color: var(--color-approved);
+  border: 1px solid #bfe3cf;
+}
+
+/* ---------- tables ---------- */
+
+.table-wrapper {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+thead th {
+  text-align: left;
+  padding: 12px 14px;
+  background: #eef1f4;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+/* ---------- badges ---------- */
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-PENDING {
+  background: var(--color-pending-bg);
+  color: var(--color-pending);
+}
+.badge-APPROVED {
+  background: var(--color-approved-bg);
+  color: var(--color-approved);
+}
+.badge-REJECTED {
+  background: var(--color-rejected-bg);
+  color: var(--color-rejected);
+}
+
+.badge-role {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* ---------- login ---------- */
+
+.login-wrapper {
+  /* Not 100vh: this sits inside .page, which already has padding, so a full
+     viewport height would push the layout into a scrollbar. */
+  min-height: 72vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.login-subtitle {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+.demo-credentials {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-muted);
+  line-height: 1.7;
+}
+
+.demo-credentials code {
+  background: #eef1f4;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}

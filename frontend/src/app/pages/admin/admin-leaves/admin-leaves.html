@@ -1,0 +1,93 @@
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Leave Requests</h1>
+    <p class="page-subtitle">{{ pendingCount() }} request(s) awaiting review</p>
+  </div>
+
+  <div class="field" style="margin-bottom: 0; min-width: 180px">
+    <label for="statusFilter">Filter by status</label>
+    <select id="statusFilter" (change)="onFilterChange($event)">
+      <option value="ALL">All</option>
+      <option value="PENDING">Pending</option>
+      <option value="APPROVED">Approved</option>
+      <option value="REJECTED">Rejected</option>
+    </select>
+  </div>
+</div>
+
+@if (successMessage()) {
+  <div class="alert alert-success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert alert-error">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <p class="muted">Loading leave requests...</p>
+} @else {
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Code</th>
+          <th>Type</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th>Reviewed</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (leave of visibleLeaves(); track leave.id) {
+          <tr>
+            <td>{{ leave.employeeName }}</td>
+            <td>{{ leave.employeeCode }}</td>
+            <td>{{ leave.leaveType }}</td>
+            <!-- DatePipe formats the ISO string the API sent, no conversion needed -->
+            <td>{{ leave.startDate | date: 'mediumDate' }}</td>
+            <td>{{ leave.endDate | date: 'mediumDate' }}</td>
+            <td>{{ leave.reason }}</td>
+            <td>
+              <!-- Class name is built from the status, matching .badge-PENDING etc. in styles.css -->
+              <span class="badge badge-{{ leave.status }}">{{ leave.status }}</span>
+            </td>
+            <td>
+              {{ leave.reviewedAt ? (leave.reviewedAt | date: 'short') : '—' }}
+            </td>
+            <td>
+              @if (leave.status === 'PENDING') {
+                <div class="table-actions">
+                  <button
+                    type="button"
+                    class="btn btn-success btn-sm"
+                    [disabled]="busyId() === leave.id"
+                    (click)="approve(leave)"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-danger btn-sm"
+                    [disabled]="busyId() === leave.id"
+                    (click)="reject(leave)"
+                  >
+                    Reject
+                  </button>
+                </div>
+              } @else {
+                <span class="muted">Reviewed</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="9" class="empty-state">No leave requests match this filter.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
