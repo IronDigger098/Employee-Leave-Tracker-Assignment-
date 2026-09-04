@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -93,6 +94,49 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 request.getRequestURI());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    /**
+     * 401 - wrong email or password at login.
+     *
+     * Note this is distinct from the 401 produced by JwtAuthenticationEntryPoint.
+     * That one fires in the security filter chain for a missing or invalid token,
+     * before any controller runs. This one fires inside AuthService. Same status,
+     * two different places, because they happen at two different stages.
+     */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException ex,
+                                                             HttpServletRequest request) {
+        ApiError body = new ApiError(
+                HttpStatus.UNAUTHORIZED.value(),
+                HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+    }
+
+    /**
+     * 403 - authenticated, but not allowed.
+     *
+     * Catches BOTH sources of denial with one handler:
+     *   - @PreAuthorize("hasRole('ADMIN')") failing on a controller method
+     *   - the ownership check in LeaveService, which throws this same type
+     * That is exactly why the service throws Spring Security's AccessDeniedException
+     * rather than inventing its own exception class.
+     *
+     * 401 vs 403 is worth being precise about: 401 means "I do not know who you
+     * are", 403 means "I know who you are, and you may not do this".
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex,
+                                                       HttpServletRequest request) {
+        ApiError body = new ApiError(
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage() == null ? "You do not have permission to perform this action"
+                        : ex.getMessage(),
+                request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     /**

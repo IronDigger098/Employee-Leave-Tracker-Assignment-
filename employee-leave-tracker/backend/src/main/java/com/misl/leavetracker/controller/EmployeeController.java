@@ -6,6 +6,7 @@ import com.misl.leavetracker.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,11 +29,17 @@ import java.util.List;
  * @RestController = @Controller + @ResponseBody, meaning every return value is
  * serialised to JSON by Jackson instead of being resolved as a view name.
  *
- * Role restriction (@PreAuthorize("hasRole('ADMIN')")) is added in Phase 4,
- * once authentication exists to restrict against.
+ * The class-level @PreAuthorize applies to EVERY method below - managing staff
+ * records is an HR function. Putting it on the class rather than repeating it on
+ * five methods also means an endpoint added here later is protected by default
+ * instead of being accidentally left open.
+ *
+ * A non-admin calling any of these gets 403; a caller with no token at all gets
+ * 401 from the filter chain, before this class is ever reached.
  */
 @RestController
 @RequestMapping("/api/employees")
+@PreAuthorize("hasRole('ADMIN')")
 public class EmployeeController {
 
     private final EmployeeService employeeService;

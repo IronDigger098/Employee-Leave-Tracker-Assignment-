@@ -2,10 +2,13 @@ package com.misl.leavetracker.controller;
 
 import com.misl.leavetracker.dto.LeaveRequestDto;
 import com.misl.leavetracker.dto.LeaveResponse;
+import com.misl.leavetracker.security.EmployeeUserDetails;
 import com.misl.leavetracker.service.LeaveService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -14,7 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -22,13 +24,16 @@ import java.util.List;
 /**
  * HTTP entry point for leave requests.
  *
- * ============================================================================
- *  PHASE 3 NOTE - the two `@RequestParam Long employeeId` parameters below are
- *  TEMPORARY. They exist only so these endpoints can be tested before
- *  authentication exists. In Phase 4 each is replaced by the id of the
- *  authenticated user taken from the SecurityContext, and the query parameter
- *  disappears from the API. Nothing else in this class changes.
- * ============================================================================
+ * The Phase 3 "?employeeId=" query parameters are gone. Identity now comes from
+ * {@code @AuthenticationPrincipal}, which hands us the EmployeeUserDetails that
+ * JwtAuthenticationFilter placed in the SecurityContext. The client can no longer
+ * claim to be someone else, because it never supplies the id at all.
+ *
+ * Authorization is split deliberately:
+ *   - ROLE checks live here as @PreAuthorize. They are static and readable at a
+ *     glance: "this endpoint is for admins".
+ *   - OWNERSHIP checks live in LeaveService, because deciding whether row 7
+ *     belongs to you requires loading row 7 first.
  */
 @RestController
 @RequestMapping("/api/leaves")
@@ -40,72 +45,87 @@ public class LeaveController {
         this.leaveService = leaveService;
     }
 
-    /** GET /api/leaves -> 200, all requests newest first. Becomes ADMIN-only in Phase 4. */
+    /**
+     * GET /api/leaves - every request in the system. ADMIN only.
+     *
+     * @PreAuthorize runs BEFORE the method body. A non-admin never reaches the
+     * service; Spring throws AccessDeniedException, which GlobalExceptionHandler
+     * turns into 403.
+     */
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<LeaveResponse>> getAll() {
         return ResponseEntity.ok(leaveService.findAll());
     }
 
-    /**
-     * GET /api/leaves/my -> 200, the caller's own requests.
-     *
-     * Declared before /{id} for readability, though Spring does not need the order:
-     * when two patterns match, the more specific literal segment ("my") always wins
-     * over a variable segment ("{id}").
-     *
-     * PHASE 3: employeeId comes from a query parameter. PHASE 4: from the JWT.
-     */
+    /** GET /api/leaves/my - the caller's own requests. Any authenticated user. */
     @GetMapping("/my")
-    public ResponseEntity<List<LeaveResponse>> getMy(@RequestParam Long employeeId) {
-        return ResponseEntity.ok(leaveService.findByEmployee(employeeId));
-    }
-
-    /** GET /api/leaves/{id} -> 200, or 404. */
-    @GetMapping("/{id}")
-    public ResponseEntity<LeaveResponse> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(leaveService.findById(id));
+    public ResponseEntity<List<LeaveResponse>> getMy(
+            @AuthenticationPrincipal EmployeeUserDetails currentUser) {
+        return ResponseEntity.ok(leaveService.findMyLeaves(currentUser));
     }
 
     /**
-     * POST /api/leaves -> 201 Created, status PENDING.
+     * GET /api/leaves/{id} - 200 for an admin or the owner, 403 for anyone else.
      *
-     * PHASE 3: employeeId comes from a query parameter. PHASE 4: from the JWT.
+     * No @PreAuthorize here: the answer depends on the row, so the check has to
+     * happen in the service after loading it.
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<LeaveResponse> getById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal EmployeeUserDetails currentUser) {
+        return ResponseEntity.ok(leaveService.findById(id, currentUser));
+    }
+
+    /**
+     * POST /api/leaves -> 201, status PENDING, owned by the caller.
+     *
+     * Left open to any authenticated user rather than restricted to EMPLOYEE: an
+     * admin is also a member of staff who takes leave, and forbidding that would
+     * be an odd rule to have to justify.
      */
     @PostMapping
-    public ResponseEntity<LeaveResponse> create(@Valid @RequestBody LeaveRequestDto request,
-                                                @RequestParam Long employeeId) {
-        LeaveResponse created = leaveService.create(request, employeeId);
+    public ResponseEntity<LeaveResponse> create(
+            @Valid @RequestBody LeaveRequestDto request,
+            @AuthenticationPrincipal EmployeeUserDetails currentUser) {
+        LeaveResponse created = leaveService.create(request, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    /** PUT /api/leaves/{id} -> 200. Rejected with 400 if the request is not PENDING. */
+    /** PUT /api/leaves/{id} - owner only, and only while PENDING. */
     @PutMapping("/{id}")
-    public ResponseEntity<LeaveResponse> update(@PathVariable Long id,
-                                                @Valid @RequestBody LeaveRequestDto request) {
-        return ResponseEntity.ok(leaveService.update(id, request));
+    public ResponseEntity<LeaveResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody LeaveRequestDto request,
+            @AuthenticationPrincipal EmployeeUserDetails currentUser) {
+        return ResponseEntity.ok(leaveService.update(id, request, currentUser));
     }
 
-    /** DELETE /api/leaves/{id} -> 204 No Content. */
+    /** DELETE /api/leaves/{id} -> 204. Admin: any. Employee: own, while PENDING. */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        leaveService.delete(id);
+    public ResponseEntity<Void> delete(
+            @PathVariable Long id,
+            @AuthenticationPrincipal EmployeeUserDetails currentUser) {
+        leaveService.delete(id, currentUser);
         return ResponseEntity.noContent().build();
     }
 
     /**
-     * PATCH /api/leaves/{id}/approve -> 200.
+     * PATCH /api/leaves/{id}/approve - ADMIN only.
      *
-     * PATCH rather than PUT because this changes ONE field (status) rather than
-     * replacing the whole resource, and it carries no body at all - the URL says
-     * everything. Becomes ADMIN-only in Phase 4.
+     * PATCH rather than PUT because this changes one field rather than replacing
+     * the resource, and it carries no request body at all.
      */
     @PatchMapping("/{id}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<LeaveResponse> approve(@PathVariable Long id) {
         return ResponseEntity.ok(leaveService.approve(id));
     }
 
-    /** PATCH /api/leaves/{id}/reject -> 200. Becomes ADMIN-only in Phase 4. */
+    /** PATCH /api/leaves/{id}/reject - ADMIN only. */
     @PatchMapping("/{id}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<LeaveResponse> reject(@PathVariable Long id) {
         return ResponseEntity.ok(leaveService.reject(id));
     }

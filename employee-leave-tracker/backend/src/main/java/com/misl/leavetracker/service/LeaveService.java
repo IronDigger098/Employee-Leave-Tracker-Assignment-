@@ -9,6 +9,8 @@ import com.misl.leavetracker.exception.BadRequestException;
 import com.misl.leavetracker.exception.ResourceNotFoundException;
 import com.misl.leavetracker.repository.EmployeeRepository;
 import com.misl.leavetracker.repository.LeaveRequestRepository;
+import com.misl.leavetracker.security.EmployeeUserDetails;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,13 +21,15 @@ import java.util.List;
 /**
  * Business logic for leave requests.
  *
- * Two rules live here that no annotation can express:
- *   1. endDate must not be before startDate  (compares two fields)
- *   2. only a PENDING request may be edited, approved or rejected  (depends on
- *      the row's current state, not on the incoming payload)
+ * Three kinds of rule live here, none of which an annotation can express:
+ *   1. endDate must not be before startDate            (spans two fields)
+ *   2. only a PENDING request may be edited or reviewed (depends on stored state)
+ *   3. an employee may only touch their OWN requests    (depends on who is asking)
  *
- * Both are enforced here rather than in the controller so they hold for every
- * caller - the REST API today, the data seeder, and anything added later.
+ * Rule 3 is the one that matters most for the assessment. @PreAuthorize on the
+ * controller can express "must be an ADMIN", but it cannot express "must be the
+ * owner of row 7" - that requires loading row 7 first. So role checks sit on the
+ * controller and ownership checks sit here, right next to the data they protect.
  */
 @Service
 public class LeaveService {
@@ -39,36 +43,46 @@ public class LeaveService {
         this.employeeRepository = employeeRepository;
     }
 
-    /** Admin view: every request, newest first. Uses JOIN FETCH to avoid N+1. */
+    /** Admin view: every request, newest first. JOIN FETCH avoids the N+1 problem. */
     @Transactional(readOnly = true)
     public List<LeaveResponse> findAll() {
         return toResponseList(leaveRequestRepository.findAllWithEmployee());
     }
 
-    /** Employee view: one person's own requests, newest first. */
+    /**
+     * The caller's own requests.
+     *
+     * There is no id parameter a client could tamper with - the id comes from the
+     * authenticated principal, so "my leaves" cannot be turned into "his leaves"
+     * by editing a URL.
+     */
     @Transactional(readOnly = true)
-    public List<LeaveResponse> findByEmployee(Long employeeId) {
-        return toResponseList(leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId));
+    public List<LeaveResponse> findMyLeaves(EmployeeUserDetails currentUser) {
+        return toResponseList(
+                leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(currentUser.getId()));
     }
 
+    /** One request. Admins see any; an employee sees only their own. */
     @Transactional(readOnly = true)
-    public LeaveResponse findById(Long id) {
-        return toResponse(getLeaveOrThrow(id));
+    public LeaveResponse findById(Long id, EmployeeUserDetails currentUser) {
+        LeaveRequest leaveRequest = getLeaveOrThrow(id);
+        checkOwnership(leaveRequest, currentUser);
+        return toResponse(leaveRequest);
     }
 
     /**
-     * Submit a new leave request.
+     * Submit a new request. Always starts PENDING, always belongs to the caller.
      *
-     * employeeId is a parameter, never part of the DTO - in Phase 4 the controller
-     * will supply it from the authenticated user instead of from the request.
-     * Status is forced to PENDING; the client has no say in it.
+     * Compare this with Phase 3, where employeeId arrived as a query parameter.
+     * Now it comes from the token, so an employee cannot file leave in a
+     * colleague's name.
      */
     @Transactional
-    public LeaveResponse create(LeaveRequestDto dto, Long employeeId) {
+    public LeaveResponse create(LeaveRequestDto dto, EmployeeUserDetails currentUser) {
         validateDates(dto);
 
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee", employeeId));
+        Employee employee = employeeRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Employee", currentUser.getId()));
 
         LeaveRequest leaveRequest = new LeaveRequest(
                 employee,
@@ -76,20 +90,22 @@ public class LeaveService {
                 dto.getStartDate(),
                 dto.getEndDate(),
                 dto.getReason());
-        // status = PENDING and createdAt are set by the constructor and @PrePersist.
 
         return toResponse(leaveRequestRepository.save(leaveRequest));
     }
 
     /**
-     * Edit a request that has not been reviewed yet.
+     * Edit a request that has not been reviewed.
      *
-     * Once an admin has approved or rejected it, the record is a decision and
-     * editing it would change what was decided - so that is a 400, not a silent update.
+     * Two guards, in this order: ownership first (are you allowed to see this row
+     * at all?), then state (is it still editable?). Checking state first would let
+     * a stranger learn from the error message whether someone else's request had
+     * been approved.
      */
     @Transactional
-    public LeaveResponse update(Long id, LeaveRequestDto dto) {
+    public LeaveResponse update(Long id, LeaveRequestDto dto, EmployeeUserDetails currentUser) {
         LeaveRequest leaveRequest = getLeaveOrThrow(id);
+        checkOwnership(leaveRequest, currentUser);
 
         if (leaveRequest.getStatus() != LeaveStatus.PENDING) {
             throw new BadRequestException("Only a PENDING leave request can be edited. "
@@ -105,26 +121,41 @@ public class LeaveService {
         return toResponse(leaveRequestRepository.save(leaveRequest));
     }
 
+    /**
+     * Withdraw a request.
+     *
+     * An admin may delete any request. An employee may withdraw only their own,
+     * and only while it is still PENDING - deleting an approved leave would erase
+     * a decision from the record.
+     */
     @Transactional
-    public void delete(Long id) {
-        leaveRequestRepository.delete(getLeaveOrThrow(id));
+    public void delete(Long id, EmployeeUserDetails currentUser) {
+        LeaveRequest leaveRequest = getLeaveOrThrow(id);
+        checkOwnership(leaveRequest, currentUser);
+
+        if (!currentUser.isAdmin() && leaveRequest.getStatus() != LeaveStatus.PENDING) {
+            throw new BadRequestException("Only a PENDING leave request can be withdrawn. "
+                    + "This request is already " + leaveRequest.getStatus());
+        }
+
+        leaveRequestRepository.delete(leaveRequest);
     }
 
+    /** ADMIN only - enforced by @PreAuthorize on the controller. */
     @Transactional
     public LeaveResponse approve(Long id) {
         return review(id, LeaveStatus.APPROVED);
     }
 
+    /** ADMIN only - enforced by @PreAuthorize on the controller. */
     @Transactional
     public LeaveResponse reject(Long id) {
         return review(id, LeaveStatus.REJECTED);
     }
 
     /**
-     * The single state transition in this application: PENDING -> APPROVED / REJECTED.
-     *
-     * approve() and reject() differ only in the target status, so the guard, the
-     * timestamp and the save live in one place. If the rule changes, it changes once.
+     * The single state transition in this application:
+     * PENDING -> APPROVED, or PENDING -> REJECTED. Nothing else is legal.
      */
     private LeaveResponse review(Long id, LeaveStatus newStatus) {
         LeaveRequest leaveRequest = getLeaveOrThrow(id);
@@ -141,8 +172,23 @@ public class LeaveService {
     }
 
     /**
-     * A same-day leave (start == end) is valid; only end BEFORE start is rejected.
+     * The privacy rule: an ADMIN may act on any request, an EMPLOYEE only on rows
+     * whose employee_id equals their own.
+     *
+     * Throwing Spring Security's AccessDeniedException (rather than our own
+     * exception type) keeps this consistent with what @PreAuthorize throws, so a
+     * single handler in GlobalExceptionHandler turns both into 403.
      */
+    private void checkOwnership(LeaveRequest leaveRequest, EmployeeUserDetails currentUser) {
+        if (currentUser.isAdmin()) {
+            return;
+        }
+        if (!leaveRequest.getEmployee().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You can only access your own leave requests");
+        }
+    }
+
+    /** A single-day leave (start == end) is valid; only end BEFORE start is rejected. */
     private void validateDates(LeaveRequestDto dto) {
         if (dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BadRequestException("End date must not be before start date");
@@ -150,9 +196,9 @@ public class LeaveService {
     }
 
     /**
-     * Loads with JOIN FETCH so the employee is available when mapping to the DTO.
-     * Without it, open-in-view = false would cause a LazyInitializationException
-     * the moment Jackson or the mapper touched leaveRequest.getEmployee().
+     * JOIN FETCH so the employee is loaded in the same query. Without it,
+     * open-in-view = false would throw LazyInitializationException as soon as
+     * checkOwnership() or the mapper touched leaveRequest.getEmployee().
      */
     private LeaveRequest getLeaveOrThrow(Long id) {
         return leaveRequestRepository.findByIdWithEmployee(id)
