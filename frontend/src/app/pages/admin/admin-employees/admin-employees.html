@@ -99,9 +99,19 @@
 
         <div class="field">
           <label for="active">Status</label>
+          <!--
+            [ngValue], not [value]. An <option value> is always a STRING in the
+            DOM, so [value]="true" would bind the string "true" while the form
+            control holds the boolean true - they never match, and the select
+            renders blank when editing an existing employee.
+
+            [ngValue] keeps the real JavaScript value, so boolean true in the
+            control matches boolean true on the option. Use [value] for string
+            options (role, leaveType above) and [ngValue] for anything else.
+          -->
           <select id="active" formControlName="active">
-            <option [value]="true">Active</option>
-            <option [value]="false">Inactive</option>
+            <option [ngValue]="true">Active</option>
+            <option [ngValue]="false">Inactive</option>
           </select>
         </div>
       </div>
