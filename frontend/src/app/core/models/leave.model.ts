@@ -44,6 +44,11 @@ export interface LeaveRequestPayload {
   reason: string;
 }
 
-/** Option lists for the dropdowns, kept next to the types they belong to. */
+/**
+ * The options for the leave-type dropdown, kept next to the type it belongs to.
+ *
+ * A matching LEAVE_STATUSES array is deliberately absent: nothing in the UI lets
+ * a user pick a status. The admin filter's options are fixed in the template and
+ * the status itself is only ever changed through the approve/reject endpoints.
+ */
 export const LEAVE_TYPES: LeaveType[] = ['CASUAL', 'SICK', 'ANNUAL'];
-export const LEAVE_STATUSES: LeaveStatus[] = ['PENDING', 'APPROVED', 'REJECTED'];
