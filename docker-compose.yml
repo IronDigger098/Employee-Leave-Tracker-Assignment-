@@ -1,0 +1,99 @@
+# =============================================================================
+#  Employee Leave Tracker - full stack.
+#
+#      docker compose up --build
+#
+#  brings up three containers, in the right order, with no other setup:
+#
+#      frontend  (nginx)        http://localhost:4200
+#      backend   (Spring Boot)  http://localhost:8080
+#      db        (PostgreSQL)   internal only
+#
+#  There is no `version:` key at the top - it has been obsolete since Compose v2
+#  and current versions warn about it.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  #  PostgreSQL
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: elt-db
+    restart: unless-stopped
+    environment:
+      # ${VAR:-default} = "use VAR from the environment or a .env file, else this
+      # default". That is what lets the project run with no .env file at all,
+      # while still allowing every value to be overridden without editing code.
+      POSTGRES_DB: ${POSTGRES_DB:-leave_tracker}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      # A NAMED VOLUME. Without it the database lives in the container's writable
+      # layer and every `docker compose down` would wipe all data. With it, the
+      # data outlives the container.
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready reports whether Postgres is actually accepting connections.
+      # This is what `depends_on: condition: service_healthy` waits for below.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-leave_tracker}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    # Note: port 5432 is deliberately NOT published to the host. Nothing outside
+    # the Docker network needs it, and publishing it would clash with any
+    # Postgres already running on the machine. To inspect the data:
+    #   docker compose exec db psql -U postgres -d leave_tracker
+
+  # ---------------------------------------------------------------------------
+  #  Spring Boot backend
+  # ---------------------------------------------------------------------------
+  backend:
+    build: ./backend
+    container_name: elt-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        # Plain `depends_on: [db]` only waits for the container to START, not for
+        # Postgres inside it to be READY - and Postgres takes a few seconds to
+        # initialise. Without this condition the backend wins the race, fails to
+        # connect, and exits. Waiting on the healthcheck fixes it properly.
+        condition: service_healthy
+    environment:
+      # These override the ${...:-default} placeholders in application.yml.
+      #
+      # The host is `db` - the SERVICE NAME above, which Docker's internal DNS
+      # resolves to that container. Using `localhost` here would make the backend
+      # look for a database inside its own container, where there is none. This
+      # is the single most common mistake when dockerising a multi-service app.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-leave_tracker}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+      # Development default. A real deployment sets JWT_SECRET in the environment;
+      # nothing secret is committed to this repository.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production-0123456789abcdef}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+    ports:
+      # Published so the API can be exercised directly with Postman or curl.
+      # The frontend does NOT use this - it reaches the backend over the internal
+      # network via nginx.
+      - '8080:8080'
+
+  # ---------------------------------------------------------------------------
+  #  Angular frontend, served by nginx
+  # ---------------------------------------------------------------------------
+  frontend:
+    build: ./frontend
+    container_name: elt-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # host 4200 -> container 80. 4200 purely so the Docker URL matches the one
+      # used during development with `ng serve`.
+      - '4200:80'
+
+volumes:
+  postgres-data:

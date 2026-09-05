@@ -1,0 +1,22 @@
+# Everything listed here is excluded from the build context - the snapshot of
+# files Docker uploads to the daemon before building.
+#
+# This matters for speed AND correctness: target/ can hold hundreds of megabytes
+# of compiled output from a host build, and copying it in would both slow the
+# build and risk mixing host-compiled classes into the image.
+
+target/
+*.jar
+*.war
+
+.git/
+.gitignore
+
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+*.md

@@ -1,0 +1,20 @@
+# node_modules MUST be excluded. `npm ci` installs a fresh, correct tree inside
+# the container; copying the host's tree over it would overwrite that with
+# packages built for a different OS/architecture - a classic and very confusing
+# source of "works on my machine" Docker failures.
+
+node_modules/
+dist/
+.angular/
+
+.git/
+.gitignore
+
+.vscode/
+.idea/
+
+# Only used by `ng serve` on a developer machine; nginx does the proxying in the
+# container, so this file has no effect here.
+proxy.conf.json
+
+*.md
