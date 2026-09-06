@@ -2,12 +2,14 @@ package com.misl.leavetracker.controller;
 
 import com.misl.leavetracker.dto.EmployeeRequest;
 import com.misl.leavetracker.dto.EmployeeResponse;
+import com.misl.leavetracker.security.EmployeeUserDetails;
 import com.misl.leavetracker.service.EmployeeService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -100,10 +102,16 @@ public class EmployeeController {
      *
      * Archives the employee rather than erasing the row: their leave history is
      * preserved. See EmployeeService.delete for why.
+     *
+     * @AuthenticationPrincipal injects the caller that JwtAuthenticationFilter put
+     * in the SecurityContext. It is passed to the service so it can refuse a
+     * self-archive - the id comes from the verified token, never from the request
+     * body, so a client cannot claim to be somebody else.
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        employeeService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id,
+                                       @AuthenticationPrincipal EmployeeUserDetails currentUser) {
+        employeeService.delete(id, currentUser.getId());
         return ResponseEntity.noContent().build();
     }
 }

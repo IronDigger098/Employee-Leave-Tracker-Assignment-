@@ -232,6 +232,14 @@ An archived employee is hidden from the staff list, cannot log in, and cannot be
 edited. Admins can still see them with `GET /api/employees?includeArchived=true`
 (the **Show archived** checkbox on the Employees page).
 
+**Lockout protection.** Creating an `ADMIN` requires being an `ADMIN`, so losing the
+last administrator would lock the application permanently — no route back in short of
+editing the database by hand. Three changes are therefore refused with `400`:
+
+- an admin archiving their **own** account
+- archiving the **last active** admin
+- demoting or deactivating the last active admin through `PUT`
+
 All enums are persisted with `@Enumerated(EnumType.STRING)`, so the database stores
 `'APPROVED'` rather than an ordinal index that would silently change meaning if the
 enum were ever reordered.
@@ -458,9 +466,11 @@ Or, without installing Maven:
 docker run --rm -v "$(pwd)/backend:/app" -w /app maven:3.9-eclipse-temurin-21 mvn test
 ```
 
-The suite covers the business rules that no annotation can express — the
-date-range rule, the `PENDING`-only state transitions, and the ownership checks —
-plus signing, expiry and tamper-detection in `JwtService`.
+36 tests covering the business rules that no annotation can express — the date-range
+rule, the 27-day entitlement, overlap rejection, the `PENDING`-only state transitions
+and the ownership checks; the archiving rules, including a test that fails loudly if
+anyone ever swaps the soft delete back for a real one; and signing, expiry and
+tamper-detection in `JwtService`.
 
 They are plain unit tests with Mockito mocks, **not** `@SpringBootTest`: no Spring
 context starts and no database is required, so they run in milliseconds on a

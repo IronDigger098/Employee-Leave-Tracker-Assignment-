@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Role } from '../../../core/models/auth.model';
 import { Employee } from '../../../core/models/employee.model';
+import { AuthService } from '../../../core/services/auth.service';
 import { EmployeeService } from '../../../core/services/employee.service';
 
 /**
@@ -21,6 +22,18 @@ import { EmployeeService } from '../../../core/services/employee.service';
 export class AdminEmployees implements OnInit {
   private readonly formBuilder = inject(FormBuilder);
   private readonly employeeService = inject(EmployeeService);
+  private readonly authService = inject(AuthService);
+
+  /**
+   * True for the row belonging to the signed-in admin.
+   *
+   * Used to hide the Archive button on your own row. The server refuses a
+   * self-archive anyway (EmployeeService.delete); this only spares the admin a
+   * click that was always going to fail.
+   */
+  isSelf(employee: Employee): boolean {
+    return this.authService.currentUser()?.employeeId === employee.id;
+  }
 
   readonly employees = signal<Employee[]>([]);
   /** When on, archived (soft-deleted) employees are listed as well. */

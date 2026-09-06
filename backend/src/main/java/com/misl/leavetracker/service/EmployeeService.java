@@ -3,6 +3,7 @@ package com.misl.leavetracker.service;
 import com.misl.leavetracker.dto.EmployeeRequest;
 import com.misl.leavetracker.dto.EmployeeResponse;
 import com.misl.leavetracker.entity.Employee;
+import com.misl.leavetracker.entity.Role;
 import com.misl.leavetracker.exception.BadRequestException;
 import com.misl.leavetracker.exception.DuplicateResourceException;
 import com.misl.leavetracker.exception.ResourceNotFoundException;
@@ -123,6 +124,18 @@ public class EmployeeService {
                     + request.getEmployeeCode());
         }
 
+        /*
+         * The other two doors to a locked-out system. Archiving the last admin is
+         * the obvious one, but demoting them to EMPLOYEE or setting active = false
+         * has exactly the same effect, and an edit form makes either a one-click
+         * accident. Same guard, same message.
+         */
+        boolean losingAdminAccess = request.getRole() != Role.ADMIN
+                || (request.getActive() != null && !request.getActive());
+        if (losingAdminAccess) {
+            assertNotLastActiveAdmin(employee, "Changing their role or deactivating them");
+        }
+
         employee.setEmployeeCode(request.getEmployeeCode());
         employee.setName(request.getName());
         employee.setEmail(request.getEmail());
@@ -166,18 +179,65 @@ public class EmployeeService {
      * not the client's.
      */
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, Long currentUserId) {
         Employee employee = getEmployeeOrThrow(id);
 
         if (employee.isDeleted()) {
             throw new BadRequestException("This employee has already been archived.");
         }
 
+        /*
+         * Guard 1: no archiving yourself.
+         *
+         * Archiving sets active = false, and JwtAuthenticationFilter re-checks that
+         * flag on every single request - so an admin who archived themselves would
+         * be signed out by their very next click, holding a token the server now
+         * refuses. Blocking it here turns an irreversible mistake into a message.
+         */
+        if (employee.getId().equals(currentUserId)) {
+            throw new BadRequestException(
+                    "You cannot archive your own account. Ask another administrator to do it.");
+        }
+
+        // Guard 2: never leave the system without a usable administrator.
+        assertNotLastActiveAdmin(employee, "Archiving them");
+
         employee.setDeleted(true);
         // Archived implies no access - otherwise a removed employee could still log in.
         employee.setActive(false);
 
         employeeRepository.save(employee);
+    }
+
+    /**
+     * Refuses any change that would remove the final working administrator.
+     *
+     * This is a lockout guard, not a business rule. Creating an ADMIN requires
+     * being an ADMIN (@PreAuthorize("hasRole('ADMIN')") on EmployeeController), so
+     * the moment the last one loses access there is no path back in through the
+     * application at all - recovery means hand-editing the database or wiping the
+     * volume and losing every record. A one-query check is cheap insurance against
+     * a mistake with no undo.
+     *
+     * There are three doors into that state and all of them come through here:
+     * archiving the admin, deactivating them, and demoting them to EMPLOYEE.
+     */
+    private void assertNotLastActiveAdmin(Employee employee, String action) {
+        boolean currentlyAWorkingAdmin =
+                employee.getRole() == Role.ADMIN && employee.isActive() && !employee.isDeleted();
+
+        if (!currentlyAWorkingAdmin) {
+            // Removing someone who was never a usable admin cannot cause a lockout.
+            return;
+        }
+
+        if (employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN) <= 1) {
+            throw new BadRequestException(
+                    "This is the only active administrator. " + action
+                            + " would leave nobody able to manage employees or review leave "
+                            + "requests, and no way to create a replacement. "
+                            + "Create another ADMIN first.");
+        }
     }
 
     /**

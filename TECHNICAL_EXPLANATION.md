@@ -488,6 +488,60 @@ Data has no equivalent built in, so the three pieces are written by hand — the
 `@SQLDelete` + `@Where` can approximate it, but a hidden global filter is a trap the
 first time you genuinely need the archived rows, so an explicit boolean is clearer here.
 
+### Protecting the last administrator
+
+Soft-deleting exposed a sharper problem than data loss. `EmployeeController` carries
+`@PreAuthorize("hasRole('ADMIN')")` at class level, so **creating an admin requires
+being an admin**. The demo data seeds exactly one. Archive that account and the
+application is bricked: nobody can manage staff, nobody can approve leave, and nobody
+can create a replacement admin — recovery means hand-editing PostgreSQL or wiping the
+volume and losing every record.
+
+The failure is also immediate rather than gradual, because `JwtAuthenticationFilter`
+reloads the employee from the database on every request and checks `isEnabled()`:
+
+```java
+UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+if (userDetails.isEnabled()) { ... }
+```
+
+That design is right — a demoted employee loses access at once instead of when their
+token expires 24 hours later — but it means an admin who archived themselves is refused
+on their *next click*, still holding a token the server no longer honours.
+
+Three doors lead to that state, and one guard closes all of them:
+
+```java
+private void assertNotLastActiveAdmin(Employee employee, String action) {
+    boolean currentlyAWorkingAdmin =
+            employee.getRole() == Role.ADMIN && employee.isActive() && !employee.isDeleted();
+    if (!currentlyAWorkingAdmin) {
+        return;
+    }
+    if (employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN) <= 1) {
+        throw new BadRequestException("This is the only active administrator. " + action + " ...");
+    }
+}
+```
+
+| Door | Where it is closed |
+|---|---|
+| Archiving the last admin | `delete()` |
+| Demoting them to `EMPLOYEE` | `update()` |
+| Setting `active = false` | `update()` |
+| Archiving **yourself** | `delete()`, comparing the target id to the authenticated caller |
+
+The caller's id comes from `@AuthenticationPrincipal`, i.e. from the verified token —
+never from the request body, so a client cannot claim to be somebody else.
+
+Note the guard counts `role = ADMIN AND active = true AND deleted = false`. Counting
+admins alone would be wrong: an admin who is deactivated cannot sign in, so they are no
+protection against a lockout and must not be counted as one.
+
+This is a **usability and availability** guard, not a security control. It stops an
+authorised admin making an irreversible mistake; it is not defending against an
+attacker, who by definition already has admin rights if they can reach this endpoint.
+
 `EmployeeServiceTest` pins the behaviour down:
 
 ```java

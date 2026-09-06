@@ -1,6 +1,7 @@
 package com.misl.leavetracker.repository;
 
 import com.misl.leavetracker.entity.Employee;
+import com.misl.leavetracker.entity.Role;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -45,6 +46,20 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     /** Headcount for the admin dashboard - archived staff are not employees. */
     long countByDeletedFalse();
+
+    /**
+     * How many administrators can actually log in right now.
+     *
+     * Used to stop the last one being archived, demoted or deactivated. Without
+     * this the application can be locked out permanently: creating an ADMIN
+     * requires being an ADMIN, so once the final one is gone nobody can make
+     * another, and the only way back in is editing the database by hand.
+     *
+     * Both flags matter. `deleted` alone is not enough - an admin with
+     * active = false is equally unable to sign in, so they cannot be the one
+     * administrator the system is relying on.
+     */
+    long countByRoleAndActiveTrueAndDeletedFalse(Role role);
 
     /** Uniqueness checks on CREATE. */
     boolean existsByEmail(String email);

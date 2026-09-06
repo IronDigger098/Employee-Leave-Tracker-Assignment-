@@ -184,9 +184,20 @@
                   <button type="button" class="btn btn-secondary btn-sm" (click)="startEdit(employee)">
                     Edit
                   </button>
-                  <button type="button" class="btn btn-danger btn-sm" (click)="remove(employee)">
-                    Archive
-                  </button>
+                  <!--
+                    No Archive button on your own row. Archiving sets active = false
+                    and the JWT filter re-checks that flag on every request, so an
+                    admin who archived themselves would be locked out on their very
+                    next click. The server refuses it too - this just removes the
+                    trap from the screen.
+                  -->
+                  @if (!isSelf(employee)) {
+                    <button type="button" class="btn btn-danger btn-sm" (click)="remove(employee)">
+                      Archive
+                    </button>
+                  } @else {
+                    <span class="muted">You</span>
+                  }
                 </div>
               }
             </td>

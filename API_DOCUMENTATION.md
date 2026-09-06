@@ -239,7 +239,7 @@ Update an employee. Same body as `POST`, with one difference:
 
 | Code | Cause |
 |---|---|
-| `400` | Validation failure, **or the employee has been archived** |
+| `400` | Validation failure; the employee is archived; or the change would demote or deactivate the **only active admin** |
 | `404` | No employee with that id |
 | `409` | Another employee already uses that email or code |
 
@@ -259,11 +259,20 @@ server's business, not the client's.
 
 An archived employee cannot be edited — `PUT /api/employees/{id}` returns `400`.
 
+**Two lockout guards apply.** Creating an `ADMIN` requires *being* an `ADMIN`, so if the
+last administrator loses access there is no way back in through the application at all.
+The server therefore refuses to:
+
+1. let an admin archive **their own account** — archiving sets `active = false`, and the
+   JWT filter re-checks that flag on every request, so they would be signed out on their
+   very next click;
+2. archive the **last active administrator**.
+
 **Response — `204 No Content`**, empty body.
 
 | Code | Cause |
 |---|---|
-| `400` | The employee is already archived |
+| `400` | Already archived; archiving yourself; or archiving the only active admin |
 | `404` | No employee with that id |
 
 ---

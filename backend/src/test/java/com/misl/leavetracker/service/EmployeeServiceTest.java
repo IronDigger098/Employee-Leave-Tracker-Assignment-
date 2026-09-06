@@ -1,5 +1,6 @@
 package com.misl.leavetracker.service;
 
+import com.misl.leavetracker.dto.EmployeeRequest;
 import com.misl.leavetracker.dto.EmployeeResponse;
 import com.misl.leavetracker.entity.Employee;
 import com.misl.leavetracker.entity.Role;
@@ -36,6 +37,9 @@ import static org.mockito.Mockito.when;
 class EmployeeServiceTest {
 
     private static final Long EMPLOYEE_ID = 2L;
+    private static final Long ADMIN_ID = 1L;
+    /** Whoever is signed in while performing the archive - an admin other than the target. */
+    private static final Long CALLER_ID = 99L;
 
     @Mock
     private EmployeeRepository employeeRepository;
@@ -58,13 +62,21 @@ class EmployeeServiceTest {
         return employee;
     }
 
+    private Employee ayeshaTheAdmin() {
+        Employee employee = new Employee(
+                "ADM001", "Ayesha Rahman", "admin@misl.com", "hashed",
+                "Human Resources", "HR Manager", Role.ADMIN, true);
+        employee.setId(ADMIN_ID);
+        return employee;
+    }
+
     @Test
     @DisplayName("delete() archives the employee instead of removing the row")
     void deleteArchivesRatherThanRemoving() {
         Employee rahim = rahim();
         when(employeeRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(rahim));
 
-        employeeService.delete(EMPLOYEE_ID);
+        employeeService.delete(EMPLOYEE_ID, CALLER_ID);
 
         /*
          * The assertion that matters. If this ever fails because someone
@@ -89,9 +101,88 @@ class EmployeeServiceTest {
         archived.setDeleted(true);
         when(employeeRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(archived));
 
-        assertThatThrownBy(() -> employeeService.delete(EMPLOYEE_ID))
+        assertThatThrownBy(() -> employeeService.delete(EMPLOYEE_ID, CALLER_ID))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("already been archived");
+
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    @DisplayName("delete() refuses to archive the last active admin")
+    void deleteRefusesTheLastAdmin() {
+        Employee admin = ayeshaTheAdmin();
+        when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
+        // Ayesha is the only administrator who can still sign in.
+        when(employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN)).thenReturn(1L);
+
+        /*
+         * Without this guard the application is permanently locked out: creating an
+         * ADMIN requires being an ADMIN, so once the last one is archived there is
+         * no route back in short of editing the database by hand.
+         */
+        assertThatThrownBy(() -> employeeService.delete(ADMIN_ID, CALLER_ID))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("only active administrator");
+
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    @DisplayName("delete() allows archiving an admin while another admin remains")
+    void deleteAllowsAdminWhenAnotherRemains() {
+        Employee admin = ayeshaTheAdmin();
+        when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
+        when(employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN)).thenReturn(2L);
+
+        employeeService.delete(ADMIN_ID, CALLER_ID);
+
+        // The rule protects the LAST admin, not admins in general.
+        ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+        verify(employeeRepository).save(saved.capture());
+        assertThat(saved.getValue().isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("delete() refuses to let an admin archive their own account")
+    void deleteRefusesSelfArchive() {
+        Employee admin = ayeshaTheAdmin();
+        when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
+
+        // Same id in both arguments: the signed-in admin clicked Archive on themselves.
+        assertThatThrownBy(() -> employeeService.delete(ADMIN_ID, ADMIN_ID))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("cannot archive your own account");
+
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    @DisplayName("update() refuses to demote the last active admin to EMPLOYEE")
+    void updateRefusesDemotingTheLastAdmin() {
+        Employee admin = ayeshaTheAdmin();
+        when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
+        when(employeeRepository.existsByEmailAndIdNot("admin@misl.com", ADMIN_ID)).thenReturn(false);
+        when(employeeRepository.existsByEmployeeCodeAndIdNot("ADM001", ADMIN_ID)).thenReturn(false);
+        when(employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN)).thenReturn(1L);
+
+        /*
+         * Archiving is not the only way to lose the last admin. Demoting them to
+         * EMPLOYEE, or setting active = false, locks the system just as thoroughly -
+         * and an edit form makes either a single careless click.
+         */
+        EmployeeRequest demotion = new EmployeeRequest();
+        demotion.setEmployeeCode("ADM001");
+        demotion.setName("Ayesha Rahman");
+        demotion.setEmail("admin@misl.com");
+        demotion.setDepartment("Human Resources");
+        demotion.setDesignation("HR Manager");
+        demotion.setRole(Role.EMPLOYEE);
+        demotion.setActive(true);
+
+        assertThatThrownBy(() -> employeeService.update(ADMIN_ID, demotion))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("only active administrator");
 
         verify(employeeRepository, never()).save(any(Employee.class));
     }
