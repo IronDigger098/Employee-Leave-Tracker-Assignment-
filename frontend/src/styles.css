@@ -368,6 +368,12 @@ tbody tr:last-child td {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  /*
+    Without this, a plain text item next to a button (the "You" marker on the
+    admin's own row) sits flush to the top of the row instead of lining up with
+    the button beside it - flex stretches children by default.
+  */
+  align-items: center;
 }
 
 .empty-state {
