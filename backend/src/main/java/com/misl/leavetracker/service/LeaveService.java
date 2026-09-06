@@ -10,21 +10,27 @@ import com.misl.leavetracker.exception.ResourceNotFoundException;
 import com.misl.leavetracker.repository.EmployeeRepository;
 import com.misl.leavetracker.repository.LeaveRequestRepository;
 import com.misl.leavetracker.security.EmployeeUserDetails;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Business logic for leave requests.
  *
- * Three kinds of rule live here, none of which an annotation can express:
+ * Four kinds of rule live here, none of which an annotation can express:
  *   1. endDate must not be before startDate            (spans two fields)
  *   2. only a PENDING request may be edited or reviewed (depends on stored state)
  *   3. an employee may only touch their OWN requests    (depends on who is asking)
+ *   4. the annual entitlement may not be exceeded       (depends on other rows)
  *
  * Rule 3 is the one that matters most for the assessment. @PreAuthorize on the
  * controller can express "must be an ADMIN", but it cannot express "must be the
@@ -34,13 +40,28 @@ import java.util.List;
 @Service
 public class LeaveService {
 
+    /**
+     * A request in either of these states occupies part of the employee's
+     * entitlement. REJECTED does not - a refused request costs nothing.
+     */
+    private static final Set<LeaveStatus> STATUSES_THAT_CONSUME_ENTITLEMENT =
+            EnumSet.of(LeaveStatus.PENDING, LeaveStatus.APPROVED);
+
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeRepository employeeRepository;
+    private final int annualEntitlementDays;
 
     public LeaveService(LeaveRequestRepository leaveRequestRepository,
-                        EmployeeRepository employeeRepository) {
+                        EmployeeRepository employeeRepository,
+                        @Value("${app.leave.annual-entitlement-days}") int annualEntitlementDays) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
+        this.annualEntitlementDays = annualEntitlementDays;
+    }
+
+    /** Exposed so the dashboard can show the entitlement alongside days used. */
+    public int getAnnualEntitlementDays() {
+        return annualEntitlementDays;
     }
 
     /** Admin view: every request, newest first. JOIN FETCH avoids the N+1 problem. */
@@ -80,6 +101,7 @@ public class LeaveService {
     @Transactional
     public LeaveResponse create(LeaveRequestDto dto, EmployeeUserDetails currentUser) {
         validateDates(dto);
+        checkAnnualEntitlement(currentUser.getId(), dto, null);
 
         Employee employee = employeeRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee", currentUser.getId()));
@@ -112,6 +134,7 @@ public class LeaveService {
                     + "This request is already " + leaveRequest.getStatus());
         }
         validateDates(dto);
+        checkAnnualEntitlement(leaveRequest.getEmployee().getId(), dto, leaveRequest.getId());
 
         leaveRequest.setLeaveType(dto.getLeaveType());
         leaveRequest.setStartDate(dto.getStartDate());
@@ -193,6 +216,77 @@ public class LeaveService {
         if (dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BadRequestException("End date must not be before start date");
         }
+    }
+
+    /**
+     * Total days already committed by this employee in the given calendar year.
+     *
+     * A request is attributed to the year of its START date. A request that
+     * straddles new year therefore counts wholly against the year it began in.
+     * Splitting it across two years would be more precise, but it complicates
+     * every calculation for a rare case; this rule is simple and predictable,
+     * which matters more for a policy people have to reason about.
+     */
+    @Transactional(readOnly = true)
+    public long usedLeaveDays(Long employeeId, int year) {
+        return sumLeaveDays(employeeId, year, null);
+    }
+
+    private long sumLeaveDays(Long employeeId, int year, Long excludeLeaveId) {
+        List<LeaveRequest> counted = leaveRequestRepository
+                .findByEmployeeIdAndStatusInAndStartDateBetween(
+                        employeeId,
+                        STATUSES_THAT_CONSUME_ENTITLEMENT,
+                        LocalDate.of(year, 1, 1),
+                        LocalDate.of(year, 12, 31));
+
+        long total = 0;
+        for (LeaveRequest existing : counted) {
+            /*
+             * When EDITING a request, that request's own days must not be counted
+             * against the employee - otherwise extending a 5-day leave by one day
+             * would be measured as if they were asking for 6 days on top of the 5
+             * they already hold.
+             */
+            if (excludeLeaveId != null && excludeLeaveId.equals(existing.getId())) {
+                continue;
+            }
+            total += lengthInDays(existing.getStartDate(), existing.getEndDate());
+        }
+        return total;
+    }
+
+    /**
+     * Enforces the annual entitlement.
+     *
+     * Like the date-range and state rules, this cannot be an annotation: it depends
+     * on rows already in the database, not on the incoming payload.
+     *
+     * @param excludeLeaveId the request being edited, or null when creating
+     */
+    private void checkAnnualEntitlement(Long employeeId, LeaveRequestDto dto, Long excludeLeaveId) {
+        int year = dto.getStartDate().getYear();
+
+        long alreadyUsed = sumLeaveDays(employeeId, year, excludeLeaveId);
+        long requested = lengthInDays(dto.getStartDate(), dto.getEndDate());
+        long remaining = annualEntitlementDays - alreadyUsed;
+
+        if (requested > remaining) {
+            throw new BadRequestException(String.format(
+                    "This request is %d day(s), but you have only %d of your %d annual "
+                            + "leave days remaining for %d.",
+                    requested, Math.max(remaining, 0), annualEntitlementDays, year));
+        }
+    }
+
+    /**
+     * Length of a leave in whole days, counting both ends.
+     *
+     * The +1 is the point: 10 Sep to 12 Sep is three days off work, not two.
+     * ChronoUnit.DAYS.between is exclusive of the end date.
+     */
+    static long lengthInDays(LocalDate start, LocalDate end) {
+        return ChronoUnit.DAYS.between(start, end) + 1;
     }
 
     /**

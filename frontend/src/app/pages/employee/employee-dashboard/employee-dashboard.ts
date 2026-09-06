@@ -22,6 +22,8 @@ export class EmployeeDashboard implements OnInit {
 
   readonly user = this.authService.currentUser;
   readonly stats = signal<DashboardStats | null>(null);
+  /** The balance is per calendar year, so the heading says which year. */
+  readonly currentYear = new Date().getFullYear();
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 

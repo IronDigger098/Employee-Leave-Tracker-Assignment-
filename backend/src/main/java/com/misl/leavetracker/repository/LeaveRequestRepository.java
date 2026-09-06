@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +45,23 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
      * loads that employee once and serves the rest from the persistence context.
      */
     List<LeaveRequest> findByEmployeeIdOrderByCreatedAtDesc(Long employeeId);
+
+    /**
+     * Every request by one employee, in one calendar year, that counts against
+     * their annual entitlement.
+     *
+     * Derived query again, and the name says the whole WHERE clause:
+     *   EmployeeId       -> employee_id = ?
+     *   StatusIn         -> status IN (?, ?)
+     *   StartDateBetween -> start_date BETWEEN ? AND ?
+     *
+     * PENDING is included alongside APPROVED on purpose. If only approved days
+     * counted, an employee could submit ten overlapping requests while none had
+     * been reviewed and blow straight past the limit - the check would only bite
+     * later, and the problem would land on the admin instead.
+     */
+    List<LeaveRequest> findByEmployeeIdAndStatusInAndStartDateBetween(
+            Long employeeId, Collection<LeaveStatus> statuses, LocalDate from, LocalDate to);
 
     /** Dashboard counters (used in Phase 4). */
     long countByStatus(LeaveStatus status);

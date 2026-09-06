@@ -51,7 +51,7 @@ docker compose up --build
 
 - Log in with email and password
 - Dashboard with personal leave counters
-- Submit a leave request
+- Submit a leave request, with the remaining annual balance shown before applying
 - View own leave requests and their status
 - Withdraw a request while it is still pending
 
@@ -62,6 +62,10 @@ docker compose up --build
 - Only an `ADMIN` may manage employees or review leave requests
 - A leave request can only be approved, rejected or edited while it is `PENDING`
 - `endDate` may not be earlier than `startDate`
+- **Each employee may take at most 27 leave days per calendar year.** Approved and
+  pending days both count, so a queue of unreviewed requests cannot be used to slip
+  past the limit. The remaining balance is shown on the employee dashboard and on
+  the apply form
 - A deactivated employee (`active = false`) cannot log in
 
 ---

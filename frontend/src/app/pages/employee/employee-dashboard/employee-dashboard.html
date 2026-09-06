@@ -6,6 +6,35 @@
 } @else if (errorMessage()) {
   <div class="alert alert-error">{{ errorMessage() }}</div>
 } @else if (stats(); as s) {
+  <!--
+    Leave balance first: it is the number an employee actually needs before
+    deciding whether to apply. The status counts are secondary.
+  -->
+  <h2 class="page-title" style="font-size: 17px">Leave Balance {{ currentYear }}</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-label">Annual Entitlement</span>
+      <span class="stat-value">{{ s.annualEntitlementDays }}</span>
+    </div>
+    <div class="stat-card stat-pending">
+      <span class="stat-label">Days Used</span>
+      <span class="stat-value">{{ s.leaveDaysUsed }}</span>
+    </div>
+    <div class="stat-card" [class.stat-approved]="s.leaveDaysRemaining > 0"
+         [class.stat-rejected]="s.leaveDaysRemaining === 0">
+      <span class="stat-label">Days Remaining</span>
+      <span class="stat-value">{{ s.leaveDaysRemaining }}</span>
+    </div>
+  </div>
+
+  @if (s.leaveDaysRemaining === 0) {
+    <div class="alert alert-error">
+      You have used all {{ s.annualEntitlementDays }} of your leave days for
+      {{ currentYear }}. Further requests will be rejected.
+    </div>
+  }
+
+  <h2 class="page-title" style="font-size: 17px">My Requests</h2>
   <div class="stat-grid">
     <div class="stat-card">
       <span class="stat-label">My Requests</span>

@@ -1,8 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { DashboardStats } from '../../../core/models/employee.model';
 import { LEAVE_TYPES, LeaveType } from '../../../core/models/leave.model';
+import { EmployeeService } from '../../../core/services/employee.service';
 import { LeaveService } from '../../../core/services/leave.service';
 
 /**
@@ -40,15 +42,57 @@ const dateRangeValidator = (group: AbstractControl): ValidationErrors | null => 
   imports: [ReactiveFormsModule],
   templateUrl: './leave-form.html',
 })
-export class LeaveForm {
+export class LeaveForm implements OnInit {
   private readonly formBuilder = inject(FormBuilder);
   private readonly leaveService = inject(LeaveService);
+  private readonly employeeService = inject(EmployeeService);
   private readonly router = inject(Router);
 
   readonly leaveTypes = LEAVE_TYPES;
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly fieldErrors = signal<Record<string, string>>({});
+
+  /** Leave balance, loaded on open so the user can see it before choosing dates. */
+  readonly stats = signal<DashboardStats | null>(null);
+
+  /**
+   * Fetch the balance when the page opens.
+   *
+   * If it fails we simply do not show the hint - the form still works, and the
+   * server enforces the entitlement regardless. A failed nice-to-have should
+   * never block the main action.
+   */
+  ngOnInit(): void {
+    this.employeeService.employeeStats().subscribe({
+      next: (stats) => this.stats.set(stats),
+      error: () => this.stats.set(null),
+    });
+  }
+
+  /**
+   * Length of the requested leave in days, counting both ends - the same +1 rule
+   * the server uses in LeaveService.lengthInDays().
+   *
+   * A getter rather than a computed signal because it reads from the reactive
+   * form, which is not signal-based; Angular re-evaluates it during change
+   * detection as the user edits the dates.
+   */
+  get requestedDays(): number {
+    const { startDate, endDate } = this.form.getRawValue();
+    if (!startDate || !endDate || endDate < startDate) {
+      return 0;
+    }
+    const millisPerDay = 24 * 60 * 60 * 1000;
+    const span = new Date(endDate).getTime() - new Date(startDate).getTime();
+    return Math.round(span / millisPerDay) + 1;
+  }
+
+  /** True when the chosen dates would take the employee past their entitlement. */
+  get exceedsBalance(): boolean {
+    const balance = this.stats();
+    return balance !== null && this.requestedDays > balance.leaveDaysRemaining;
+  }
 
   /** Today as yyyy-MM-dd, used as the `min` on the date inputs. */
   readonly today = new Date().toISOString().substring(0, 10);

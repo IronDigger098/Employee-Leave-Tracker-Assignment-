@@ -2,8 +2,11 @@ package com.misl.leavetracker.entity;
 
 /**
  * The kind of leave being requested.
- * Kept to three values on purpose - the assessment does not ask for a
- * leave-balance/quota system, so these are labels, not accounting categories.
+ *
+ * Note these are labels, not separate balances: the annual entitlement in
+ * LeaveService is a single pool shared by all three types, not 27 days of each.
+ * Per-type allowances would be the natural next step, and would mean storing the
+ * allowance per type rather than as one application-wide value.
  */
 public enum LeaveType {
     CASUAL,

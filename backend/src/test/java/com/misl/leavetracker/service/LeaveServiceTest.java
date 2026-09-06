@@ -12,15 +12,16 @@ import com.misl.leavetracker.exception.ResourceNotFoundException;
 import com.misl.leavetracker.repository.EmployeeRepository;
 import com.misl.leavetracker.repository.LeaveRequestRepository;
 import com.misl.leavetracker.security.EmployeeUserDetails;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,12 +34,13 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for the business rules in {@link LeaveService}.
  *
- * These target exactly the three kinds of rule that no annotation can express,
+ * These target exactly the four kinds of rule that no annotation can express,
  * which is precisely why they are the rules worth testing:
  *
  *   1. cross-field validation  - endDate must not precede startDate
  *   2. state transitions       - only a PENDING request may be edited or reviewed
  *   3. ownership               - an employee may only touch their own requests
+ *   4. annual entitlement      - depends on the employee's other rows for the year
  *
  * Deliberately NOT @SpringBootTest. These are plain unit tests: the repositories
  * are Mockito mocks, so no Spring context starts and no database is needed. They
@@ -67,9 +69,24 @@ class LeaveServiceTest {
     @Mock
     private EmployeeRepository employeeRepository;
 
-    /** Mockito builds the service and injects the two mocks above via its constructor. */
-    @InjectMocks
+    /** The entitlement the service under test is configured with. */
+    private static final int ENTITLEMENT_DAYS = 27;
+
     private LeaveService leaveService;
+
+    /**
+     * Built by hand rather than with @InjectMocks.
+     *
+     * The service's third constructor argument is a plain int read from
+     * configuration. @InjectMocks has no mock to supply for a primitive and would
+     * pass 0, giving every test an entitlement of zero days - so every request
+     * would be refused and the failures would look like a bug in the rule rather
+     * than a bug in the test setup.
+     */
+    @BeforeEach
+    void setUp() {
+        leaveService = new LeaveService(leaveRequestRepository, employeeRepository, ENTITLEMENT_DAYS);
+    }
 
     // ---------------------------------------------------------------- helpers
 
@@ -111,6 +128,28 @@ class LeaveServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
+    /**
+     * The entitlement check asks the repository what this employee already has
+     * booked this year. These helpers control that answer.
+     *
+     * Only stubbed in tests that actually reach the check - Mockito runs in strict
+     * mode, and an unused stub fails the test rather than being ignored.
+     */
+    private void stubExistingLeave(LeaveRequest... existing) {
+        when(leaveRequestRepository.findByEmployeeIdAndStatusInAndStartDateBetween(
+                any(Long.class), any(), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(existing));
+    }
+
+    /** A previously booked leave of the given length, owned by the given employee. */
+    private LeaveRequest bookedLeave(Employee owner, Long id, LocalDate start, int days) {
+        LeaveRequest leaveRequest = new LeaveRequest(
+                owner, LeaveType.ANNUAL, start, start.plusDays(days - 1L), "Earlier leave");
+        leaveRequest.setId(id);
+        leaveRequest.setStatus(LeaveStatus.APPROVED);
+        return leaveRequest;
+    }
+
     // ------------------------------------------------- 1. date range validation
 
     @Test
@@ -136,6 +175,7 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
         LocalDate sameDay = LocalDate.of(2026, 9, 10);
 
+        stubExistingLeave();
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
 
@@ -151,6 +191,7 @@ class LeaveServiceTest {
     void createAlwaysStartsPendingAndOwnedByCaller() {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
 
+        stubExistingLeave();
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
 
@@ -227,6 +268,85 @@ class LeaveServiceTest {
         assertThatThrownBy(() -> leaveService.update(LEAVE_ID, edit, currentUser))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Only a PENDING leave request can be edited");
+    }
+
+    // ------------------------------------------- 4. annual leave entitlement
+
+    @Test
+    @DisplayName("a request within the remaining entitlement is accepted")
+    void createAcceptsRequestWithinEntitlement() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+
+        // 20 days already booked, 7 remaining, asking for 5.
+        stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 20));
+        when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
+        stubSaveReturnsArgument();
+
+        LeaveResponse response = leaveService.create(
+                dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 14)),
+                new EmployeeUserDetails(rahim));
+
+        assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("a request that would exceed the annual entitlement is refused")
+    void createRefusesRequestBeyondEntitlement() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+
+        // 25 days already booked, 2 remaining, asking for 5.
+        stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 25));
+        EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
+        LeaveRequestDto tooLong = dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 14));
+
+        assertThatThrownBy(() -> leaveService.create(tooLong, currentUser))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("This request is 5 day(s)")
+                .hasMessageContaining("only 2 of your 27 annual leave days remaining");
+
+        verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
+    }
+
+    @Test
+    @DisplayName("a request using the entitlement exactly to the last day is accepted")
+    void createAcceptsRequestUsingTheLastRemainingDay() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+
+        // 25 booked + 2 requested = exactly 27. The limit is inclusive.
+        stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 25));
+        when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
+        stubSaveReturnsArgument();
+
+        LeaveResponse response = leaveService.create(
+                dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 11)),
+                new EmployeeUserDetails(rahim));
+
+        assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("editing a request does not count that request against its own entitlement")
+    void updateExcludesTheRequestBeingEditedFromTheTotal() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+        LeaveRequest existing = pendingLeaveOwnedBy(rahim);
+
+        /*
+         * The only leave on file IS the one being edited (25 days, id = LEAVE_ID).
+         * Extending it to 26 days must succeed: without the exclusion the service
+         * would read 25 already used and refuse anything over 2.
+         */
+        LeaveRequest sameRequestAsStored = bookedLeave(rahim, LEAVE_ID, LocalDate.of(2026, 9, 1), 25);
+
+        when(leaveRequestRepository.findByIdWithEmployee(LEAVE_ID)).thenReturn(Optional.of(existing));
+        stubExistingLeave(sameRequestAsStored);
+        stubSaveReturnsArgument();
+
+        LeaveResponse response = leaveService.update(
+                LEAVE_ID,
+                dto(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 26)),
+                new EmployeeUserDetails(rahim));
+
+        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 9, 1));
     }
 
     // ------------------------------------------------------------ 3. ownership

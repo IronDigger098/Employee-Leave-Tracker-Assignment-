@@ -383,6 +383,7 @@ Edit a request. Only the **owner**, and only while the status is `PENDING`.
 | Code | Cause |
 |---|---|
 | `400` | `"Only a PENDING leave request can be edited. This request is already APPROVED"` |
+| `400` | The edit would exceed the annual entitlement. The request's own current days are excluded from the total, so extending a leave by one day is measured as one extra day, not the whole thing again |
 | `403` | Not the owner |
 | `404` | No leave request with that id |
 
@@ -489,9 +490,16 @@ The caller's own counters. Any authenticated user.
   "totalLeaves": 2,
   "pendingLeaves": 1,
   "approvedLeaves": 1,
-  "rejectedLeaves": 0
+  "rejectedLeaves": 0,
+  "annualEntitlementDays": 27,
+  "leaveDaysUsed": 11,
+  "leaveDaysRemaining": 16
 }
 ```
+
+`leaveDaysUsed` counts approved **and** pending days in the current calendar year;
+`leaveDaysRemaining` never goes below zero. The three balance fields are `0` on the
+admin endpoint, where they have no meaning.
 
 `totalEmployees` is `0` here — it has no meaning on a personal dashboard. Both
 endpoints share one response type because the shape is identical; the endpoint decides

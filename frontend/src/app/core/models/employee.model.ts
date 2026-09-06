@@ -38,11 +38,24 @@ export interface EmployeeRequest {
   active: boolean;
 }
 
-/** GET /api/dashboard/admin and /api/dashboard/employee - matches DashboardResponse.java. */
+/**
+ * GET /api/dashboard/admin and /api/dashboard/employee - matches DashboardResponse.java.
+ *
+ * One interface for both endpoints, because the JSON shape is identical; the
+ * endpoint decides which fields carry meaning. `totalEmployees` is 0 on the
+ * employee dashboard, and the three leave-balance fields are 0 on the admin one.
+ */
 export interface DashboardStats {
   totalEmployees: number;
   totalLeaves: number;
   pendingLeaves: number;
   approvedLeaves: number;
   rejectedLeaves: number;
+
+  /** Days of leave allowed per calendar year (currently 27). */
+  annualEntitlementDays: number;
+  /** Days already committed this year - approved and pending both count. */
+  leaveDaysUsed: number;
+  /** entitlement - used, never negative. */
+  leaveDaysRemaining: number;
 }

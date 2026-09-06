@@ -19,6 +19,16 @@ public class DashboardResponse {
     private long approvedLeaves;
     private long rejectedLeaves;
 
+    /*
+     * Leave-balance figures, in days, for the current calendar year. Meaningful
+     * only on the employee dashboard - the admin view leaves them at zero, the
+     * same way the employee view leaves totalEmployees at zero.
+     */
+    private int annualEntitlementDays;
+    private long leaveDaysUsed;
+    private long leaveDaysRemaining;
+
+    /** Admin dashboard: counts only, no personal leave balance. */
     public DashboardResponse(long totalEmployees, long totalLeaves, long pendingLeaves,
                              long approvedLeaves, long rejectedLeaves) {
         this.totalEmployees = totalEmployees;
@@ -26,6 +36,17 @@ public class DashboardResponse {
         this.pendingLeaves = pendingLeaves;
         this.approvedLeaves = approvedLeaves;
         this.rejectedLeaves = rejectedLeaves;
+    }
+
+    /** Employee dashboard: counts plus the caller's own entitlement position. */
+    public DashboardResponse(long totalEmployees, long totalLeaves, long pendingLeaves,
+                             long approvedLeaves, long rejectedLeaves,
+                             int annualEntitlementDays, long leaveDaysUsed,
+                             long leaveDaysRemaining) {
+        this(totalEmployees, totalLeaves, pendingLeaves, approvedLeaves, rejectedLeaves);
+        this.annualEntitlementDays = annualEntitlementDays;
+        this.leaveDaysUsed = leaveDaysUsed;
+        this.leaveDaysRemaining = leaveDaysRemaining;
     }
 
     public long getTotalEmployees() {
@@ -46,5 +67,17 @@ public class DashboardResponse {
 
     public long getRejectedLeaves() {
         return rejectedLeaves;
+    }
+
+    public int getAnnualEntitlementDays() {
+        return annualEntitlementDays;
+    }
+
+    public long getLeaveDaysUsed() {
+        return leaveDaysUsed;
+    }
+
+    public long getLeaveDaysRemaining() {
+        return leaveDaysRemaining;
     }
 }

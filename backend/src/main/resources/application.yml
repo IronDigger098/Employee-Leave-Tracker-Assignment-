@@ -40,8 +40,16 @@ spring:
 server:
   port: 8080
 
-# Custom application properties, bound in JwtService via @Value.
+# Custom application properties, bound via @Value.
 app:
+  leave:
+    # How many days of leave one employee may take per calendar year.
+    #
+    # A configuration value rather than a constant in the code: an entitlement is a
+    # company policy, and policies change. Changing it here (or via the
+    # LEAVE_ANNUAL_ENTITLEMENT_DAYS environment variable) needs no recompile.
+    annual-entitlement-days: ${LEAVE_ANNUAL_ENTITLEMENT_DAYS:27}
+
   jwt:
     # DEVELOPMENT DEFAULT ONLY - overridden by the JWT_SECRET env var in docker-compose.
     # HS256 requires a key of at least 256 bits (32 bytes); this string is comfortably longer.

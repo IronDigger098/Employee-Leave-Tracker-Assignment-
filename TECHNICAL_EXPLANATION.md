@@ -129,6 +129,16 @@ Everything that could be got wrong lives here, so it holds regardless of caller:
 - **State transitions** — "only a `PENDING` request may be reviewed" depends on what
   is currently in the database, which the incoming payload cannot know
 - **Ownership** — "is this row yours?" requires the row to be loaded first
+- **Annual entitlement** — 27 days per calendar year. This one depends on the
+  employee's *other* rows: the service sums every `APPROVED` and `PENDING` request
+  whose start date falls in that year and refuses anything that would push the total
+  over. Two details matter. Pending days count, or a burst of unreviewed requests
+  could slip past the limit and land the problem on the admin. And when *editing* a
+  request, that request's own days are excluded from the running total — otherwise
+  extending a 5-day leave by one day would be measured as asking for 6 days on top
+  of the 5 already held. The limit is a configuration property
+  (`app.leave.annual-entitlement-days`), not a constant, because an entitlement is a
+  company policy rather than a fact about the code
 - **Transactions** — `@Transactional` marks the unit of work; `readOnly = true` on
   queries lets Hibernate skip dirty-checking
 

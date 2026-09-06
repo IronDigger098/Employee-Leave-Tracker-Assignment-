@@ -6,6 +6,14 @@
     <div class="alert alert-error">{{ errorMessage() }}</div>
   }
 
+  @if (stats(); as balance) {
+    <div class="alert" style="background:#eef1f4;border:1px solid var(--color-border)">
+      You have <strong>{{ balance.leaveDaysRemaining }}</strong> of your
+      {{ balance.annualEntitlementDays }} annual leave days remaining
+      ({{ balance.leaveDaysUsed }} already used, counting approved and pending).
+    </div>
+  }
+
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
     <div class="field">
       <label for="leaveType">Leave Type</label>
@@ -44,6 +52,19 @@
     -->
     @if (dateRangeInvalid) {
       <div class="alert alert-error">End date must not be before start date.</div>
+    } @else if (requestedDays > 0) {
+      <!-- Live feedback as the dates change, so the length is never a surprise -->
+      @if (exceedsBalance) {
+        <div class="alert alert-error">
+          This request is <strong>{{ requestedDays }}</strong> day(s), which is more
+          than the {{ stats()?.leaveDaysRemaining }} you have remaining this year.
+        </div>
+      } @else {
+        <p class="muted" style="margin-top:-4px">
+          This request is <strong>{{ requestedDays }}</strong> day(s), counting both
+          the start and end dates.
+        </p>
+      }
     }
 
     <div class="field">
@@ -58,7 +79,7 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit" class="btn btn-primary" [disabled]="submitting()">
+      <button type="submit" class="btn btn-primary" [disabled]="submitting() || exceedsBalance">
         {{ submitting() ? 'Submitting...' : 'Submit Request' }}
       </button>
       <button type="button" class="btn btn-secondary" (click)="cancel()">Cancel</button>
