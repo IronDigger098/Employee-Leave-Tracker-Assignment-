@@ -16,7 +16,7 @@ import java.util.Optional;
  * derives the query from each METHOD NAME:
  *
  *   findByEmail(String)              -> SELECT * FROM employees WHERE email = ?
- *   existsByEmployeeCode(String)     -> SELECT COUNT(*) > 0 FROM employees WHERE employee_code = ?
+ *   countByDeletedFalse()            -> SELECT COUNT(*) FROM employees WHERE deleted = false
  *   existsByEmailAndIdNot(String, Long)
  *                                    -> ... WHERE email = ? AND id <> ?
  *
@@ -31,6 +31,16 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     /** Used by login and by the JWT filter to load the authenticated user. */
     Optional<Employee> findByEmail(String email);
+
+    /**
+     * Used when a create is rejected as a duplicate, to explain WHY.
+     *
+     * An archived employee still occupies their email and code - the row is kept
+     * so their leave history stays attached to a real person. Without loading the
+     * offending row we could only say "already exists", which reads as a bug to an
+     * admin looking at a list that does not contain them.
+     */
+    Optional<Employee> findByEmployeeCode(String employeeCode);
 
     /**
      * The working roster - everyone except archived employees.
@@ -61,10 +71,10 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
      */
     long countByRoleAndActiveTrueAndDeletedFalse(Role role);
 
-    /** Uniqueness checks on CREATE. */
-    boolean existsByEmail(String email);
-
-    boolean existsByEmployeeCode(String employeeCode);
+    /*
+     * CREATE has no existsBy... pair: it uses findByEmail / findByEmployeeCode
+     * above instead, because a duplicate has to be explained, not just detected.
+     */
 
     /**
      * Uniqueness checks on UPDATE.

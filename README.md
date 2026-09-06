@@ -88,7 +88,7 @@ docker compose up --build
 | Auth | JSON Web Tokens (jjwt 0.12.6), BCrypt password hashing |
 | Database | PostgreSQL 16 |
 | API docs | springdoc-openapi 2.8.14 — Swagger UI generated from the code |
-| Testing | JUnit 5, Mockito, AssertJ (36 unit tests, no Spring context) |
+| Testing | JUnit 5, Mockito, AssertJ (37 unit tests, no Spring context) |
 | Build | Maven (backend), npm / Angular CLI (frontend) |
 | Serving | nginx 1.27 (static bundle + `/api` reverse proxy) |
 | Containers | Docker, Docker Compose |
@@ -491,7 +491,7 @@ Or, without installing Maven:
 docker run --rm -v "$(pwd)/backend:/app" -w /app maven:3.9-eclipse-temurin-21 mvn test
 ```
 
-36 tests covering the business rules that no annotation can express — the date-range
+37 tests covering the business rules that no annotation can express — the date-range
 rule, the 27-day entitlement, overlap rejection, the `PENDING`-only state transitions
 and the ownership checks; the archiving rules, including a test that fails loudly if
 anyone ever swaps the soft delete back for a real one; and signing, expiry and

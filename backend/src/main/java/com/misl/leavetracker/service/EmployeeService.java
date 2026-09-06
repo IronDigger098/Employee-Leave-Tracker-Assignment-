@@ -82,14 +82,21 @@ public class EmployeeService {
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             throw new BadRequestException("Password is required when creating an employee");
         }
-        if (employeeRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateResourceException("An employee with email "
-                    + request.getEmail() + " already exists");
-        }
-        if (employeeRepository.existsByEmployeeCode(request.getEmployeeCode())) {
-            throw new DuplicateResourceException("An employee with code "
-                    + request.getEmployeeCode() + " already exists");
-        }
+        /*
+         * Loading the clashing row rather than calling existsBy... so the message can
+         * say WHY. An archived employee keeps their email and code - the row survives
+         * so their leave history stays attached to a real person - but they are hidden
+         * from the staff list. A bare "already exists" would send the admin hunting
+         * for a record they cannot see.
+         */
+        employeeRepository.findByEmail(request.getEmail()).ifPresent(clash -> {
+            throw new DuplicateResourceException(
+                    duplicateMessage("email", request.getEmail(), clash));
+        });
+        employeeRepository.findByEmployeeCode(request.getEmployeeCode()).ifPresent(clash -> {
+            throw new DuplicateResourceException(
+                    duplicateMessage("code", request.getEmployeeCode(), clash));
+        });
 
         Employee employee = new Employee();
         employee.setEmployeeCode(request.getEmployeeCode());
@@ -207,6 +214,18 @@ public class EmployeeService {
         employee.setActive(false);
 
         employeeRepository.save(employee);
+    }
+
+    /**
+     * Explains a duplicate email or employee code, naming the archived case.
+     */
+    private static String duplicateMessage(String field, String value, Employee clash) {
+        if (clash.isDeleted()) {
+            return "The " + field + " " + value + " belongs to " + clash.getName()
+                    + ", an archived employee. Archived records keep their email and code so"
+                    + " their leave history stays intact — please use a different " + field + ".";
+        }
+        return "An employee with " + field + " " + value + " already exists";
     }
 
     /**

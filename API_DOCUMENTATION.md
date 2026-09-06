@@ -212,6 +212,11 @@ Create an employee. The password is BCrypt-hashed before storage.
 | `400` | Any rule above fails — see `fieldErrors` |
 | `409` | `"An employee with email nusrat@misl.com already exists"` |
 
+> An **archived** employee still holds their email and employee code — the row is kept
+> so their leave history stays attached to a real person, and they are hidden from the
+> staff list. Reusing one gets a `409` that names the archived record rather than a bare
+> "already exists", so the admin is not left hunting for an employee they cannot see.
+
 ---
 
 ## `PUT /api/employees/{id}`

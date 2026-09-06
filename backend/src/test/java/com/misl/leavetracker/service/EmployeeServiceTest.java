@@ -5,6 +5,7 @@ import com.misl.leavetracker.dto.EmployeeResponse;
 import com.misl.leavetracker.entity.Employee;
 import com.misl.leavetracker.entity.Role;
 import com.misl.leavetracker.exception.BadRequestException;
+import com.misl.leavetracker.exception.DuplicateResourceException;
 import com.misl.leavetracker.repository.EmployeeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -183,6 +184,33 @@ class EmployeeServiceTest {
         assertThatThrownBy(() -> employeeService.update(ADMIN_ID, demotion))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("only active administrator");
+
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+
+    @Test
+    @DisplayName("create() explains that a duplicate email belongs to an archived employee")
+    void createExplainsArchivedDuplicate() {
+        Employee archived = rahim();
+        archived.setDeleted(true);
+        when(employeeRepository.findByEmail("rahim@misl.com")).thenReturn(Optional.of(archived));
+
+        EmployeeRequest rejoining = new EmployeeRequest();
+        rejoining.setEmployeeCode("EMP009");
+        rejoining.setName("Rahim Uddin");
+        rejoining.setEmail("rahim@misl.com");
+        rejoining.setPassword("employee123");
+        rejoining.setDepartment("Engineering");
+        rejoining.setDesignation("Software Engineer");
+        rejoining.setRole(Role.EMPLOYEE);
+
+        /*
+         * The admin cannot see Rahim in the staff list, so a bare "already exists"
+         * would look like a bug. The message has to name the archived record.
+         */
+        assertThatThrownBy(() -> employeeService.create(rejoining))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("archived employee");
 
         verify(employeeRepository, never()).save(any(Employee.class));
     }
