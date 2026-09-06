@@ -307,6 +307,35 @@ Base path `/api`. Every endpoint except `/api/auth/login` requires
 
 Every error response uses the same JSON shape — see `API_DOCUMENTATION.md`.
 
+### Interactive API docs (Swagger UI)
+
+With the backend running:
+
+| | URL |
+|---|---|
+| Swagger UI | **http://localhost:8080/swagger-ui.html** |
+| Raw OpenAPI 3 document | http://localhost:8080/v3/api-docs |
+
+Nothing in it is hand-written — springdoc scans the controllers and DTOs at startup,
+so the endpoint list, request bodies, response schemas and field types are generated
+from the code and cannot drift out of date.
+
+**To try the protected endpoints:**
+
+1. Expand `POST /api/auth/login` → **Try it out** → send
+   `{"email":"admin@misl.com","password":"admin123"}`
+2. Copy the `token` from the response
+3. Click **Authorize** (top right), paste the token, **Authorize**
+4. Every request from then on carries `Authorization: Bearer <token>`
+
+Log in as `rahim@misl.com` / `employee123` instead and the ADMIN-only endpoints
+return **403** — the role rules are enforced here exactly as they are for the
+Angular app.
+
+> Note this is served by the backend on port **8080**, not through nginx on 4200 —
+> nginx only proxies `/api`. A production deployment would normally switch springdoc
+> off outside development with `springdoc.api-docs.enabled=false`.
+
 ---
 
 ## 8. Docker setup

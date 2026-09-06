@@ -5,6 +5,7 @@ import com.misl.leavetracker.dto.LeaveResponse;
 import com.misl.leavetracker.security.EmployeeUserDetails;
 import com.misl.leavetracker.service.LeaveService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +36,7 @@ import java.util.List;
  *   - OWNERSHIP checks live in LeaveService, because deciding whether row 7
  *     belongs to you requires loading row 7 first.
  */
+@Tag(name = "Leave Requests", description = "Submitting, viewing and reviewing leave requests.")
 @RestController
 @RequestMapping("/api/leaves")
 public class LeaveController {

@@ -91,6 +91,28 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Login must be reachable without a token - chicken and egg.
                         .requestMatchers("/api/auth/**").permitAll()
+
+                        /*
+                         * Swagger UI and the OpenAPI document it renders.
+                         *
+                         * These must be public for the same practical reason as
+                         * login: the page has to load before you can authenticate
+                         * through it. Without this rule every Swagger URL returns
+                         * the JSON 401 from JwtAuthenticationEntryPoint and the UI
+                         * never appears.
+                         *
+                         * Exposing the API description is fine here - it documents
+                         * the shape of the endpoints, not any data, and every one of
+                         * them still enforces its own authentication and role rules.
+                         * A production deployment would normally disable springdoc
+                         * entirely outside development
+                         * (springdoc.api-docs.enabled=false).
+                         */
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**").permitAll()
                         /*
                          * Everything else needs authentication. Note the default is
                          * DENY: a new endpoint added later is protected automatically

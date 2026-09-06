@@ -4,6 +4,7 @@ import com.misl.leavetracker.dto.LoginRequest;
 import com.misl.leavetracker.dto.LoginResponse;
 import com.misl.leavetracker.service.AuthService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
  * SecurityConfig permits /api/auth/** explicitly; everything else in the
  * application requires authentication by default.
  */
+@Tag(name = "Authentication", description = "Login and JWT issuing. The only public endpoint.")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {

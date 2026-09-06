@@ -4,6 +4,7 @@ import com.misl.leavetracker.dto.EmployeeRequest;
 import com.misl.leavetracker.dto.EmployeeResponse;
 import com.misl.leavetracker.service.EmployeeService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +38,7 @@ import java.util.List;
  * A non-admin calling any of these gets 403; a caller with no token at all gets
  * 401 from the filter chain, before this class is ever reached.
  */
+@Tag(name = "Employees", description = "Staff record management. ADMIN only.")
 @RestController
 @RequestMapping("/api/employees")
 @PreAuthorize("hasRole('ADMIN')")

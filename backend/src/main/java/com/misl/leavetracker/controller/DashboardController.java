@@ -3,6 +3,7 @@ package com.misl.leavetracker.controller;
 import com.misl.leavetracker.dto.DashboardResponse;
 import com.misl.leavetracker.security.EmployeeUserDetails;
 import com.misl.leavetracker.service.DashboardService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * count them in the browser - which is both slower and a privacy problem, since
  * an employee would receive rows they are not allowed to see just to compute a total.
  */
+@Tag(name = "Dashboard", description = "Summary counters for the two dashboard screens.")
 @RestController
 @RequestMapping("/api/dashboard")
 public class DashboardController {
