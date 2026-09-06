@@ -395,6 +395,28 @@ npm start
 `proxy.conf.json` forwards `/api` from the dev server to `localhost:8080`, so the
 browser still sees a single origin and no CORS setup is needed.
 
+### Running the backend tests
+
+```bash
+cd backend
+mvn test
+```
+
+Or, without installing Maven:
+
+```bash
+docker run --rm -v "$(pwd)/backend:/app" -w /app maven:3.9-eclipse-temurin-21 mvn test
+```
+
+The suite covers the business rules that no annotation can express — the
+date-range rule, the `PENDING`-only state transitions, and the ownership checks —
+plus signing, expiry and tamper-detection in `JwtService`.
+
+They are plain unit tests with Mockito mocks, **not** `@SpringBootTest`: no Spring
+context starts and no database is required, so they run in milliseconds on a
+machine with nothing installed but a JDK. The Docker image build uses
+`-DskipTests` because an image build is an artifact step, not a CI step.
+
 ---
 
 ## 10. Demo credentials
