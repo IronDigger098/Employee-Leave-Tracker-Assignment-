@@ -50,6 +50,15 @@ app:
     # LEAVE_ANNUAL_ENTITLEMENT_DAYS environment variable) needs no recompile.
     annual-entitlement-days: ${LEAVE_ANNUAL_ENTITLEMENT_DAYS:27}
 
+  # The company's timezone, used to decide what "today" is.
+  #
+  # A Docker container with no TZ set runs on UTC. In Dhaka (UTC+6) that means
+  # LocalDate.now() still reports YESTERDAY between midnight and 6am - long enough
+  # for an employee working late to book leave for a day that has already passed.
+  # "Today" for a leave policy is a fact about where the company is, so it is
+  # configured here rather than inherited from whichever machine runs the container.
+  timezone: ${APP_TIMEZONE:Asia/Dhaka}
+
   jwt:
     # DEVELOPMENT DEFAULT ONLY - overridden by the JWT_SECRET env var in docker-compose.
     # HS256 requires a key of at least 256 bits (32 bytes); this string is comfortably longer.

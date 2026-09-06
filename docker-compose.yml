@@ -84,6 +84,15 @@ services:
       # Leave days allowed per employee per calendar year. A company policy, not a
       # constant, so it is configurable rather than compiled in.
       LEAVE_ANNUAL_ENTITLEMENT_DAYS: ${LEAVE_ANNUAL_ENTITLEMENT_DAYS:-27}
+
+      # The company's timezone. Without it the container runs on UTC, and in Dhaka
+      # (UTC+6) the server would still think it is yesterday until 6am - letting an
+      # employee book leave for a day that had already passed.
+      #
+      # APP_TIMEZONE drives the leave rules; TZ sets the JVM default so log lines
+      # and the createdAt / reviewedAt timestamps agree with them.
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Dhaka}
+      TZ: ${TZ:-Asia/Dhaka}
     ports:
       # Published so the API can be exercised directly with Postman or curl.
       # The frontend does NOT use this - it reaches the backend over the internal

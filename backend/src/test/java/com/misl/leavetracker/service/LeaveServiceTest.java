@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -59,17 +60,39 @@ class LeaveServiceTest {
      * each id a name instead of a bare number scattered through the file.
      */
     /**
+     * The same timezone the service under test is configured with, so "today"
+     * means one thing across the whole test.
+     *
+     * Using the JVM's default zone here instead would make the test disagree with
+     * the service by a full day during the hours when UTC and Dhaka differ - the
+     * exact bug these dates exist to guard against.
+     */
+    private static final String ZONE = "Asia/Dhaka";
+
+    /**
      * All test dates are expressed relative to today.
      *
-     * LeaveService now rejects a start date in the past, so hard-coded calendar
-     * dates would quietly become invalid as time passed and the suite would start
-     * failing for reasons unrelated to the code. BASE sits comfortably in the
-     * future and every date is an offset from it.
+     * LeaveService rejects a start date in the past, so hard-coded calendar dates
+     * would quietly become invalid as time passed and the suite would start failing
+     * for reasons unrelated to the code. BASE sits comfortably in the future and
+     * every date is an offset from it.
      */
-    private static final LocalDate BASE = LocalDate.now().plusDays(10);
+    private static final LocalDate BASE = LocalDate.now(ZoneId.of(ZONE)).plusDays(10);
 
     private static LocalDate day(int offsetFromBase) {
         return BASE.plusDays(offsetFromBase);
+    }
+
+    /**
+     * Today in the SERVICE's timezone.
+     *
+     * A bare LocalDate.now() here reads the JVM default, which in a container with
+     * no TZ set is UTC. The service uses Asia/Dhaka, so between midnight and 6am
+     * local the two disagree by a day and a test that means "today" ends up passing
+     * yesterday's date - which the past-date rule then correctly rejects.
+     */
+    private static LocalDate today() {
+        return LocalDate.now(ZoneId.of(ZONE));
     }
 
     private static final Long LEAVE_ID = 1L;
@@ -92,15 +115,16 @@ class LeaveServiceTest {
     /**
      * Built by hand rather than with @InjectMocks.
      *
-     * The service's third constructor argument is a plain int read from
-     * configuration. @InjectMocks has no mock to supply for a primitive and would
-     * pass 0, giving every test an entitlement of zero days - so every request
-     * would be refused and the failures would look like a bug in the rule rather
-     * than a bug in the test setup.
+     * Two of the service's constructor arguments are plain configuration values,
+     * not collaborators: an int entitlement and a timezone String. @InjectMocks has
+     * no mock to supply for those and would pass 0 and null - giving every test an
+     * entitlement of zero days, so every request would be refused and the failures
+     * would look like a bug in the rule rather than in the test setup.
      */
     @BeforeEach
     void setUp() {
-        leaveService = new LeaveService(leaveRequestRepository, employeeRepository, ENTITLEMENT_DAYS);
+        leaveService = new LeaveService(
+                leaveRequestRepository, employeeRepository, ENTITLEMENT_DAYS, ZONE);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -307,7 +331,7 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
         LeaveRequestDto backdated =
-                dto(LocalDate.now().minusDays(3), LocalDate.now().minusDays(1));
+                dto(today().minusDays(3), today().minusDays(1));
 
         assertThatThrownBy(() -> leaveService.create(backdated, currentUser))
                 .isInstanceOf(BadRequestException.class)
@@ -323,7 +347,7 @@ class LeaveServiceTest {
     @DisplayName("create() accepts leave that starts today")
     void createAcceptsLeaveStartingToday() {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
 
         stubNoOverlap();
         stubExistingLeave();

@@ -20,14 +20,33 @@ import { LeaveService } from '../../../core/services/leave.service';
  * Returning null means valid; returning an object marks the group invalid with
  * that key.
  */
+/**
+ * Today as yyyy-MM-dd in the BROWSER'S OWN timezone.
+ *
+ * Deliberately not `new Date().toISOString().substring(0, 10)`, which was the
+ * original version and was wrong: toISOString() always converts to UTC first. At
+ * 3am in Dhaka (UTC+6) it still returns yesterday's date, so the validator happily
+ * accepted a start date that had already passed.
+ *
+ * Building the string from the local getFullYear/getMonth/getDate components keeps
+ * it on the user's calendar day. padStart matters because getMonth() is 0-based and
+ * returns 8 for September - "2026-9-6" would compare wrongly as a string against
+ * "2026-09-07".
+ */
+function localToday(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 const notInPastValidator = (control: AbstractControl): ValidationErrors | null => {
   const value = control.value as string;
   if (!value) {
     return null; // Validators.required already covers an empty field
   }
   // Both are yyyy-MM-dd, and ISO date strings compare correctly as strings.
-  const today = new Date().toISOString().substring(0, 10);
-  return value < today ? { pastDate: true } : null;
+  return value < localToday() ? { pastDate: true } : null;
 };
 
 const dateRangeValidator = (group: AbstractControl): ValidationErrors | null => {
@@ -145,7 +164,8 @@ export class LeaveForm implements OnInit {
   }
 
   /** Today as yyyy-MM-dd, used as the `min` on the date inputs. */
-  readonly today = new Date().toISOString().substring(0, 10);
+  /** Feeds [min] on the date inputs, so the native picker greys out past days. */
+  readonly today = localToday();
 
   readonly form = this.formBuilder.nonNullable.group(
     {

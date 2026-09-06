@@ -133,7 +133,7 @@ Everything that could be got wrong lives here, so it holds regardless of caller:
   what a valid request is. The client mirrors it with a real Angular validator, not
   the `min` attribute on the date input — Angular sets `novalidate` on forms it
   manages, so `min` only greys out days in the native picker and a typed value walks
-  straight past it
+  straight past it. **"Today" is a timezone question** — see below
 - **State transitions** — "only a `PENDING` request may be reviewed" depends on what
   is currently in the database, which the incoming payload cannot know
 - **Ownership** — "is this row yours?" requires the row to be loaded first
@@ -159,6 +159,67 @@ Everything that could be got wrong lives here, so it holds regardless of caller:
   company policy rather than a fact about the code
 - **Transactions** — `@Transactional` marks the unit of work; `readOnly = true` on
   queries lets Hibernate skip dirty-checking
+
+### "Today" is a timezone question, not a clock question
+
+The past-date rule looks like it needs nothing but `LocalDate.now()`. It does, and the
+first version of this project got it wrong in **both** the backend and the frontend —
+in the same direction, so the two agreed with each other and the bug hid.
+
+A Docker container with no `TZ` set runs on **UTC**. At 3am in Dhaka (UTC+6) it is
+still 9pm *yesterday* in UTC, so `LocalDate.now()` returned yesterday's date and the
+server accepted a start date that had already passed for the person typing it.
+
+The frontend had the identical bug wearing different clothes:
+
+```ts
+const today = new Date().toISOString().substring(0, 10);   // WRONG
+```
+
+`toISOString()` always converts to UTC before formatting, so at 3am in Dhaka it also
+yields yesterday. Two independent checks, one shared assumption, zero disagreement to
+raise the alarm.
+
+**The fix, on each side.** The server takes the zone from configuration:
+
+```java
+private final ZoneId zone;   // from app.timezone, default Asia/Dhaka
+
+public LocalDate today() {
+    return LocalDate.now(zone);
+}
+```
+
+and the client builds the string from local calendar components instead of a UTC
+instant:
+
+```ts
+function localToday(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');   // getMonth() is 0-based
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+```
+
+The `padStart` is not cosmetic: these values are compared as strings, and `"2026-9-6"`
+sorts before `"2026-10-01"` in a way the real date does not.
+
+**Why configuration rather than the container's clock.** Setting `TZ=Asia/Dhaka` in
+`docker-compose.yml` fixes the symptom, and the project does set it so that log lines
+and the `createdAt` / `reviewedAt` audit timestamps agree with the rules. But the leave
+rule reads `app.timezone` explicitly, because *which day it is* for a leave policy is a
+fact about **where the company is**, not about which machine happens to be running the
+container. Deploy to a cloud region on UTC and an implicit dependency on the host clock
+silently returns; an explicit property does not.
+
+`DashboardService` uses the same source — `leaveService.today().getYear()` rather than
+`Year.now()` — so on 1 January the balance shown and the balance enforced cannot
+disagree about which year they mean.
+
+`LeaveServiceTest` pins its dates to the same zone for the same reason: a test built on
+the JVM default would drift a day away from the service exactly during the hours the
+bug used to appear.
 
 ### Repository — data access, without an implementation
 

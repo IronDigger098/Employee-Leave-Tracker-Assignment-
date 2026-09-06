@@ -8,7 +8,6 @@ import com.misl.leavetracker.security.EmployeeUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Year;
 
 /**
  * Summary counters for the two dashboard screens.
@@ -73,7 +72,13 @@ public class DashboardService {
          * a new request would be validated against.
          */
         int entitlement = leaveService.getAnnualEntitlementDays();
-        long used = leaveService.usedLeaveDays(employeeId, Year.now().getValue());
+        /*
+         * leaveService.today(), not Year.now() - the year has to come from the
+         * company's timezone, the same source the validation uses. Otherwise on
+         * 1 January the container (UTC) and the employee disagree about which
+         * year's balance is being shown.
+         */
+        long used = leaveService.usedLeaveDays(employeeId, leaveService.today().getYear());
 
         return new DashboardResponse(
                 0,

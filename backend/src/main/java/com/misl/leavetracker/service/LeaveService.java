@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -52,17 +53,36 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final int annualEntitlementDays;
 
+    /**
+     * The company's timezone, used to decide what "today" is.
+     *
+     * NOT the container's. A Docker container with no TZ set runs on UTC, so a
+     * bare LocalDate.now() in Dhaka (UTC+6) still reports YESTERDAY between
+     * midnight and 6am - which let an employee book leave for a day that had
+     * already passed. "Today" for a leave policy is a business fact about where
+     * the company is, so it is configured rather than inherited from the host.
+     */
+    private final ZoneId zone;
+
     public LeaveService(LeaveRequestRepository leaveRequestRepository,
                         EmployeeRepository employeeRepository,
-                        @Value("${app.leave.annual-entitlement-days}") int annualEntitlementDays) {
+                        @Value("${app.leave.annual-entitlement-days}") int annualEntitlementDays,
+                        @Value("${app.timezone}") String timezone) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
         this.annualEntitlementDays = annualEntitlementDays;
+        // Throws at startup on a bad value, which is where a misconfiguration belongs.
+        this.zone = ZoneId.of(timezone);
     }
 
     /** Exposed so the dashboard can show the entitlement alongside days used. */
     public int getAnnualEntitlementDays() {
         return annualEntitlementDays;
+    }
+
+    /** Today in the company's timezone - never the container's. */
+    public LocalDate today() {
+        return LocalDate.now(zone);
     }
 
     /** Admin view: every request, newest first. JOIN FETCH avoids the N+1 problem. */
@@ -238,7 +258,7 @@ public class LeaveService {
             throw new BadRequestException("End date must not be before start date");
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
         if (dto.getStartDate().isBefore(today)) {
             throw new BadRequestException(
                     "Leave cannot start in the past. The earliest allowed start date is " + today + ".");
