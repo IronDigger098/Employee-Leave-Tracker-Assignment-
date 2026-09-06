@@ -13,9 +13,16 @@ spring:
 
   jpa:
     hibernate:
-      # `update` lets Hibernate create/alter the tables from the @Entity classes at
-      # startup, so the grader needs zero migration steps. In a production system you
-      # would use `validate` plus Flyway migrations - worth saying out loud in the interview.
+      # `update` lets Hibernate create and alter the tables directly from the @Entity
+      # classes at startup, so the application runs against an empty database with no
+      # migration step. That is why this project has no schema files and no migration
+      # tool - the entity classes ARE the schema definition.
+      #
+      # This is a deliberate trade-off for a small project that must start with one
+      # command. It is not what you would run in production: `update` never drops or
+      # renames anything, so the schema drifts silently and is not reviewable. The
+      # production setup would be `ddl-auto: validate` alongside a migration tool such
+      # as Flyway or Liquibase, where each schema change is an explicit, versioned file.
       ddl-auto: update
     # Log the SQL Hibernate generates. Useful while learning, and useful for the demo:
     # you can literally show the SELECT that a REST call produced.

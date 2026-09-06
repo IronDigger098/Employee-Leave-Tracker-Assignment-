@@ -34,8 +34,11 @@ import java.util.Date;
  *
  * Laravel comparison: closest to a signed, self-contained Sanctum token - except
  * Sanctum stores tokens in a database table and can revoke them, while a JWT is
- * valid until it expires. That trade-off (no server state vs no revocation) is a
- * likely interview question.
+ * valid until it expires. That is the central trade-off of this approach: no
+ * server-side state to store or scale, at the cost of not being able to revoke a
+ * token before it expires. This project mitigates it by reloading the employee
+ * from the database on every request (see JwtAuthenticationFilter) rather than
+ * trusting the role claim inside the token.
  */
 @Service
 public class JwtService {

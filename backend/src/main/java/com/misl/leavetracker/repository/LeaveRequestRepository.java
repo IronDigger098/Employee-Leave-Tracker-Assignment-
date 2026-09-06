@@ -24,8 +24,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
      * the DTO - the classic N+1 problem (1 query for the list + N for the associations).
      *
      * JOIN FETCH tells Hibernate to load the employees in the SAME query, so 20 rows
-     * cost 1 query instead of 21. This is the standard fix and a very common interview
-     * question, so make sure you can explain it.
+     * cost 1 query instead of 21. With show-sql enabled you can confirm it: this
+     * method produces a single SELECT with a join, not a burst of them.
      */
     @Query("SELECT l FROM LeaveRequest l JOIN FETCH l.employee ORDER BY l.createdAt DESC")
     List<LeaveRequest> findAllWithEmployee();

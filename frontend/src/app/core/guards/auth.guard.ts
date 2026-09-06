@@ -6,10 +6,9 @@ import { AuthService } from '../services/auth.service';
 /**
  * Route guards - they decide whether a navigation is allowed to proceed.
  *
- * IMPORTANT, and worth saying out loud in an interview: these guards are a
- * USABILITY feature, not a security feature. All of this code runs in the
- * browser, where the user can edit it. Anyone can put a fake role in
- * localStorage and reach /admin/employees.
+ * IMPORTANT: these guards are a USABILITY feature, not a security feature. All of
+ * this code runs in the browser, where the user can edit it. Anyone can put a fake
+ * role in localStorage and reach /admin/employees.
  *
  * What stops them is the SERVER: every endpoint that page calls is protected by
  * @PreAuthorize, so a faked admin lands on a screen where every request returns
