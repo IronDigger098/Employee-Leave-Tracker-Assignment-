@@ -1,6 +1,5 @@
 package com.misl.leavetracker.entity;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -85,17 +84,43 @@ public class Employee {
     private boolean active = true;
 
     /**
+     * Archive flag - true once an admin has "deleted" this employee.
+     *
+     * The row is never removed, because their leave requests are a record of
+     * decisions the company made: who approved what, and when. Deleting the
+     * employee would delete that history with them, and HR needs it to survive the
+     * person leaving.
+     *
+     * Two flags rather than one, because they answer different questions:
+     *   active  = may this person log in?        (reversible, day to day)
+     *   deleted = are they still on the roster?  (terminal, hides them from lists)
+     *
+     * columnDefinition supplies the DDL default so that adding this column to a
+     * table that already has rows succeeds - without it, Postgres rejects a new
+     * NOT NULL column on a populated table.
+     */
+    @Column(columnDefinition = "boolean not null default false")
+    private boolean deleted = false;
+
+    /**
      * Inverse side of the one-to-many relationship.
      *
      * - mappedBy = "employee" tells Hibernate the FK is owned by LeaveRequest.employee,
      *   so this side creates no extra column or join table.
-     * - cascade = ALL + orphanRemoval = true means deleting an employee deletes their
-     *   leave requests, instead of the database rejecting the delete with a foreign
-     *   key violation.
      * - It is LAZY by default (OneToMany always is), so loading an employee does not
      *   drag in their whole leave history.
+     *
+     * NOTE the deliberate absence of cascade and orphanRemoval. An earlier version
+     * had cascade = ALL + orphanRemoval = true, which made deleting an employee
+     * delete their leave requests along with them. That is exactly what we do not
+     * want: the history has to outlive the employee record.
+     *
+     * Removing the cascade also makes the safe behaviour the DEFAULT rather than a
+     * convention. If anyone ever calls employeeRepository.delete(...) directly, the
+     * database now refuses it with a foreign key violation instead of silently
+     * destroying the history - the schema itself enforces the rule.
      */
-    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "employee")
     private List<LeaveRequest> leaveRequests = new ArrayList<>();
 
     /** JPA requires a no-argument constructor to instantiate entities via reflection. */
@@ -180,6 +205,14 @@ public class Employee {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
     public void setActive(boolean active) {

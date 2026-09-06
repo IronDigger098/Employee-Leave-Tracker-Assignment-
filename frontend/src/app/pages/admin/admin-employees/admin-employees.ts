@@ -23,6 +23,8 @@ export class AdminEmployees implements OnInit {
   private readonly employeeService = inject(EmployeeService);
 
   readonly employees = signal<Employee[]>([]);
+  /** When on, archived (soft-deleted) employees are listed as well. */
+  readonly showArchived = signal(false);
   readonly loading = signal(true);
   readonly saving = signal(false);
 
@@ -56,9 +58,14 @@ export class AdminEmployees implements OnInit {
     this.loadEmployees();
   }
 
+  toggleArchived(event: Event): void {
+    this.showArchived.set((event.target as HTMLInputElement).checked);
+    this.loadEmployees();
+  }
+
   loadEmployees(): void {
     this.loading.set(true);
-    this.employeeService.findAll().subscribe({
+    this.employeeService.findAll(this.showArchived()).subscribe({
       next: (employees) => {
         this.employees.set(employees);
         this.loading.set(false);
@@ -147,13 +154,17 @@ export class AdminEmployees implements OnInit {
 
   remove(employee: Employee): void {
     /*
-     * A native confirm() rather than a custom modal. Deleting an employee also
-     * deletes their leave history (cascade on the server), so a confirmation is
-     * worth having - but a hand-built modal would be a lot of markup for one
-     * yes/no question.
+     * A native confirm() rather than a custom modal - a hand-built modal would be
+     * a lot of markup for one yes/no question.
+     *
+     * The wording matters. This is an ARCHIVE, not an erase - saying "delete"
+     * without explaining would leave the admin believing they had destroyed the
+     * record, and possibly avoiding the button when they should use it.
      */
     const confirmed = window.confirm(
-      `Delete ${employee.name}? This also removes all of their leave requests.`,
+      `Archive ${employee.name}?\n\n`
+        + `They will be removed from the staff list and can no longer log in.\n`
+        + `Their leave history is KEPT so HR can still trace it.`,
     );
     if (!confirmed) {
       return;
@@ -162,7 +173,8 @@ export class AdminEmployees implements OnInit {
     this.clearMessages();
     this.employeeService.delete(employee.id).subscribe({
       next: () => {
-        this.successMessage.set('Employee deleted.');
+        this.successMessage.set(
+          'Employee archived. Their leave history has been kept.');
         this.loadEmployees();
       },
       error: (error: HttpErrorResponse) => this.showServerError(error),

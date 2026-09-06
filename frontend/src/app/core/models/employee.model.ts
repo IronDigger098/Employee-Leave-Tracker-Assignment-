@@ -18,6 +18,14 @@ export interface Employee {
   designation: string;
   role: Role;
   active: boolean;
+  /**
+   * True once the employee has been archived by an admin.
+   *
+   * Archiving is what DELETE /api/employees/{id} actually does: the record and
+   * all of its leave history are kept, the person is hidden from the roster and
+   * can no longer log in.
+   */
+  deleted: boolean;
 }
 
 /**

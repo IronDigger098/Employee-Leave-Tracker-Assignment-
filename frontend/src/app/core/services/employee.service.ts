@@ -18,9 +18,15 @@ export class EmployeeService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/employees';
 
-  /** GET /api/employees - ADMIN only; a non-admin receives 403. */
-  findAll(): Observable<Employee[]> {
-    return this.http.get<Employee[]>(this.baseUrl);
+  /**
+   * GET /api/employees - ADMIN only; a non-admin receives 403.
+   *
+   * Archived employees are excluded unless includeArchived is true. Their leave
+   * history is never removed, so HR can still trace what a former employee took.
+   */
+  findAll(includeArchived = false): Observable<Employee[]> {
+    const url = includeArchived ? `${this.baseUrl}?includeArchived=true` : this.baseUrl;
+    return this.http.get<Employee[]>(url);
   }
 
   findById(id: number): Observable<Employee> {

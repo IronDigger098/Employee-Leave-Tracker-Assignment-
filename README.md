@@ -43,7 +43,7 @@ docker compose up --build
 
 - Log in with email and password
 - Dashboard with company-wide counters (employees, pending / approved / rejected)
-- Full employee CRUD — create, view, update, delete
+- Full employee CRUD — create, view, update, archive (leave history is preserved)
 - View every leave request in the system, filterable by status
 - Approve or reject pending requests
 
@@ -215,10 +215,22 @@ employees  1 ──────< N  leave_requests
 ```
 
 - `LeaveRequest.employee` — `@ManyToOne(fetch = LAZY)`, the **owning side** (holds the FK)
-- `Employee.leaveRequests` — `@OneToMany(mappedBy = "employee", cascade = ALL, orphanRemoval = true)`
+- `Employee.leaveRequests` — `@OneToMany(mappedBy = "employee")`, with **no cascade and no
+  `orphanRemoval`**, deliberately
 
-Deleting an employee cascades to their leave requests instead of failing on a
-foreign-key constraint.
+**Employees are archived, never erased.** `DELETE /api/employees/{id}` sets
+`employees.deleted = true` and `employees.active = false`; the row and every leave
+request attached to it stay in the database. A leave request is a record of a decision
+the company made — who asked for what, who approved it, and when — so HR must still be
+able to answer "how much leave did this person take in 2026?" after they have left.
+
+Leaving the cascade off makes the safe behaviour the *default*: if anyone ever calls
+`employeeRepository.delete(...)` directly, PostgreSQL rejects it with a foreign-key
+violation instead of silently destroying the history.
+
+An archived employee is hidden from the staff list, cannot log in, and cannot be
+edited. Admins can still see them with `GET /api/employees?includeArchived=true`
+(the **Show archived** checkbox on the Employees page).
 
 All enums are persisted with `@Enumerated(EnumType.STRING)`, so the database stores
 `'APPROVED'` rather than an ordinal index that would silently change meaning if the
@@ -285,11 +297,11 @@ Base path `/api`. Every endpoint except `/api/auth/login` requires
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
 | POST | `/api/auth/login` | public | Authenticate, receive a JWT |
-| GET | `/api/employees` | ADMIN | List all employees |
+| GET | `/api/employees` | ADMIN | List employees (`?includeArchived=true` to include archived) |
 | GET | `/api/employees/{id}` | ADMIN | Get one employee |
 | POST | `/api/employees` | ADMIN | Create an employee |
 | PUT | `/api/employees/{id}` | ADMIN | Update an employee |
-| DELETE | `/api/employees/{id}` | ADMIN | Delete an employee and their leaves |
+| DELETE | `/api/employees/{id}` | ADMIN | Archive an employee — leave history is kept |
 | GET | `/api/leaves` | ADMIN | Every leave request, newest first |
 | GET | `/api/leaves/my` | authenticated | The caller's own requests |
 | GET | `/api/leaves/{id}` | ADMIN or owner | One leave request |

@@ -100,7 +100,17 @@ returns `403`.
 
 ## `GET /api/employees`
 
-List every employee.
+List employees, sorted by name.
+
+**Query parameters**
+
+| Name | Type | Default | Meaning |
+|---|---|---|---|
+| `includeArchived` | boolean | `false` | Also return archived (soft-deleted) employees |
+
+Archived employees are excluded by default — they are no longer part of the roster.
+Pass `?includeArchived=true` to see them, which is how HR reaches a former employee's
+record.
 
 **Response — `200 OK`**
 
@@ -114,7 +124,8 @@ List every employee.
     "department": "Human Resources",
     "designation": "HR Manager",
     "role": "ADMIN",
-    "active": true
+    "active": true,
+    "deleted": false
   },
   {
     "id": 2,
@@ -124,10 +135,14 @@ List every employee.
     "department": "Engineering",
     "designation": "Software Engineer",
     "role": "EMPLOYEE",
-    "active": true
+    "active": true,
+    "deleted": false
   }
 ]
 ```
+
+`deleted: true` marks an archived employee. Their leave history is still returned by
+the `/api/leaves` endpoints.
 
 > Note the absence of `password`. No employee endpoint ever returns the hash — the
 > response DTO has no such field, so it cannot be leaked by accident.
@@ -174,7 +189,8 @@ Create an employee. The password is BCrypt-hashed before storage.
   "department": "Finance",
   "designation": "Accounts Officer",
   "role": "EMPLOYEE",
-  "active": true
+  "active": true,
+  "deleted": false
 }
 ```
 
@@ -223,7 +239,7 @@ Update an employee. Same body as `POST`, with one difference:
 
 | Code | Cause |
 |---|---|
-| `400` | Validation failure |
+| `400` | Validation failure, **or the employee has been archived** |
 | `404` | No employee with that id |
 | `409` | Another employee already uses that email or code |
 
@@ -231,12 +247,23 @@ Update an employee. Same body as `POST`, with one difference:
 
 ## `DELETE /api/employees/{id}`
 
-Deletes the employee **and all of their leave requests** (cascade).
+**Archives** the employee. Their leave requests are **never deleted**.
+
+This is a soft delete: `deleted` becomes `true` and `active` becomes `false`, so the
+employee disappears from the staff list and can no longer log in, while every leave
+request they filed stays in the database attached to their name. HR keeps the trace.
+
+The verb stays `DELETE` because that is the REST verb for "remove this from the
+collection", which is what the caller means. *How* removal is implemented is the
+server's business, not the client's.
+
+An archived employee cannot be edited — `PUT /api/employees/{id}` returns `400`.
 
 **Response — `204 No Content`**, empty body.
 
 | Code | Cause |
 |---|---|
+| `400` | The employee is already archived |
 | `404` | No employee with that id |
 
 ---
@@ -544,7 +571,7 @@ compute a total.
 | `GET` | `/api/employees/{id}` | ADMIN |
 | `POST` | `/api/employees` | ADMIN |
 | `PUT` | `/api/employees/{id}` | ADMIN |
-| `DELETE` | `/api/employees/{id}` | ADMIN |
+| `DELETE` | `/api/employees/{id}` | ADMIN — archives, keeps leave history |
 | `GET` | `/api/leaves` | ADMIN |
 | `GET` | `/api/leaves/my` | authenticated |
 | `GET` | `/api/leaves/{id}` | ADMIN or owner |

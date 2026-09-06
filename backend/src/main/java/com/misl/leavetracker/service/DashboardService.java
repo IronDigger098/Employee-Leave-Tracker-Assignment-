@@ -50,7 +50,8 @@ public class DashboardService {
         long rejected = leaveRequestRepository.countByStatus(LeaveStatus.REJECTED);
 
         return new DashboardResponse(
-                employeeRepository.count(),
+                // Archived staff are not headcount.
+                employeeRepository.countByDeletedFalse(),
                 pending + approved + rejected,
                 pending,
                 approved,

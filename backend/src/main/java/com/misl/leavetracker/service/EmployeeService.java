@@ -45,14 +45,26 @@ public class EmployeeService {
     }
 
     /**
+     * The staff list.
+     *
      * readOnly = true lets Hibernate skip dirty-checking (it does not need to
      * detect changes it will never flush), and tells the driver this is a
      * read-only transaction.
+     *
+     * Archived employees are excluded by default - they are no longer part of the
+     * roster, and an admin managing staff does not want them cluttering the table.
+     * They are still reachable with includeArchived = true, because "keep the
+     * history" is worthless if nobody can look at it.
      */
     @Transactional(readOnly = true)
-    public List<EmployeeResponse> findAll() {
+    public List<EmployeeResponse> findAll(boolean includeArchived) {
+        List<Employee> employees = new ArrayList<>(employeeRepository.findByDeletedFalseOrderByNameAsc());
+        if (includeArchived) {
+            employees.addAll(employeeRepository.findByDeletedTrueOrderByNameAsc());
+        }
+
         List<EmployeeResponse> result = new ArrayList<>();
-        for (Employee employee : employeeRepository.findAll()) {
+        for (Employee employee : employees) {
             result.add(toResponse(employee));
         }
         return result;
@@ -96,6 +108,11 @@ public class EmployeeService {
     public EmployeeResponse update(Long id, EmployeeRequest request) {
         Employee employee = getEmployeeOrThrow(id);
 
+        if (employee.isDeleted()) {
+            throw new BadRequestException(
+                    "This employee has been archived and can no longer be edited.");
+        }
+
         // "AndIdNot" excludes this row, so re-saving without changing the email is fine.
         if (employeeRepository.existsByEmailAndIdNot(request.getEmail(), id)) {
             throw new DuplicateResourceException("Another employee already uses email "
@@ -129,12 +146,38 @@ public class EmployeeService {
         return toResponse(employeeRepository.save(employee));
     }
 
+    /**
+     * Archives an employee. Their leave history is NOT deleted.
+     *
+     * This is a SOFT DELETE: the row stays, `deleted` is set to true, and `active`
+     * is set to false so they can no longer log in. From the admin's point of view
+     * the employee disappears from the staff list; from HR's point of view every
+     * leave request they ever filed is still there, still attached to their name.
+     *
+     * Why not a real delete. A leave request is not just data about a person, it is
+     * a record of a decision the company made - who asked for what, who approved
+     * it, and when. Removing the employee would remove that history with them, and
+     * an HR system has to be able to answer "how much leave did this person take in
+     * 2026?" long after they have left. Payroll and audit both depend on it.
+     *
+     * The endpoint stays DELETE /api/employees/{id} because that is the REST verb
+     * for "remove this from the collection", which is what the caller means and
+     * what the assignment specifies. How removal is implemented is our business,
+     * not the client's.
+     */
     @Transactional
     public void delete(Long id) {
         Employee employee = getEmployeeOrThrow(id);
-        // cascade = ALL + orphanRemoval on Employee.leaveRequests deletes their
-        // leave requests too, instead of hitting a foreign key violation.
-        employeeRepository.delete(employee);
+
+        if (employee.isDeleted()) {
+            throw new BadRequestException("This employee has already been archived.");
+        }
+
+        employee.setDeleted(true);
+        // Archived implies no access - otherwise a removed employee could still log in.
+        employee.setActive(false);
+
+        employeeRepository.save(employee);
     }
 
     /**
@@ -162,6 +205,7 @@ public class EmployeeService {
                 employee.getDepartment(),
                 employee.getDesignation(),
                 employee.getRole(),
-                employee.isActive());
+                employee.isActive(),
+                employee.isDeleted());
     }
 }

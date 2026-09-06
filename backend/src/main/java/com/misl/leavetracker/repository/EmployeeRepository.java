@@ -4,6 +4,7 @@ import com.misl.leavetracker.entity.Employee;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,6 +30,21 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     /** Used by login and by the JWT filter to load the authenticated user. */
     Optional<Employee> findByEmail(String email);
+
+    /**
+     * The working roster - everyone except archived employees.
+     *
+     * "DeletedFalse" is a derived-query keyword: Spring Data reads it as
+     * WHERE deleted = false. Archived employees still exist and their leave
+     * history is intact; they are simply not part of the active staff list.
+     */
+    List<Employee> findByDeletedFalseOrderByNameAsc();
+
+    /** Archived employees only, for the "show archived" view. */
+    List<Employee> findByDeletedTrueOrderByNameAsc();
+
+    /** Headcount for the admin dashboard - archived staff are not employees. */
+    long countByDeletedFalse();
 
     /** Uniqueness checks on CREATE. */
     boolean existsByEmail(String email);

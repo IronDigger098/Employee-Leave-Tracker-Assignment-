@@ -20,12 +20,15 @@ public class EmployeeResponse {
     private String designation;
     private Role role;
     private boolean active;
+    /** True once archived. The row is kept so leave history stays attached to a name. */
+    private boolean deleted;
 
     public EmployeeResponse() {
     }
 
     public EmployeeResponse(Long id, String employeeCode, String name, String email,
-                            String department, String designation, Role role, boolean active) {
+                            String department, String designation, Role role, boolean active,
+                            boolean deleted) {
         this.id = id;
         this.employeeCode = employeeCode;
         this.name = name;
@@ -34,6 +37,7 @@ public class EmployeeResponse {
         this.designation = designation;
         this.role = role;
         this.active = active;
+        this.deleted = deleted;
     }
 
     public Long getId() {
@@ -94,6 +98,14 @@ public class EmployeeResponse {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
     public void setActive(boolean active) {

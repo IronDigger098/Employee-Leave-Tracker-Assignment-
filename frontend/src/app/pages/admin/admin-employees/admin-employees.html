@@ -3,9 +3,19 @@
     <h1 class="page-title">Employees</h1>
     <p class="page-subtitle">Create, update and remove staff records</p>
   </div>
-  @if (!formVisible()) {
-    <button type="button" class="btn btn-primary" (click)="startCreate()">Add Employee</button>
-  }
+  <div style="display:flex;align-items:center;gap:16px">
+    <!--
+      Archived employees are hidden by default but never destroyed - this is how
+      HR reaches a former employee's record and their leave history.
+    -->
+    <label class="muted" style="display:flex;align-items:center;gap:6px;font-size:14px">
+      <input type="checkbox" (change)="toggleArchived($event)" />
+      Show archived
+    </label>
+    @if (!formVisible()) {
+      <button type="button" class="btn btn-primary" (click)="startCreate()">Add Employee</button>
+    }
+  </div>
 </div>
 
 @if (successMessage()) {
@@ -151,23 +161,34 @@
           of destroying and rebuilding the whole table. The id is the natural key.
         -->
         @for (employee of employees(); track employee.id) {
-          <tr>
+          <tr [style.opacity]="employee.deleted ? 0.55 : 1">
             <td>{{ employee.employeeCode }}</td>
             <td>{{ employee.name }}</td>
             <td>{{ employee.email }}</td>
             <td>{{ employee.department }}</td>
             <td>{{ employee.designation }}</td>
             <td>{{ employee.role }}</td>
-            <td>{{ employee.active ? 'Active' : 'Inactive' }}</td>
             <td>
-              <div class="table-actions">
-                <button type="button" class="btn btn-secondary btn-sm" (click)="startEdit(employee)">
-                  Edit
-                </button>
-                <button type="button" class="btn btn-danger btn-sm" (click)="remove(employee)">
-                  Delete
-                </button>
-              </div>
+              @if (employee.deleted) {
+                <span class="badge badge-REJECTED">ARCHIVED</span>
+              } @else {
+                {{ employee.active ? 'Active' : 'Inactive' }}
+              }
+            </td>
+            <td>
+              @if (employee.deleted) {
+                <!-- An archived record is history: readable, not editable -->
+                <span class="muted">Leave history kept</span>
+              } @else {
+                <div class="table-actions">
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="startEdit(employee)">
+                    Edit
+                  </button>
+                  <button type="button" class="btn btn-danger btn-sm" (click)="remove(employee)">
+                    Archive
+                  </button>
+                </div>
+              }
             </td>
           </tr>
         } @empty {

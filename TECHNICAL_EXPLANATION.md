@@ -420,17 +420,83 @@ Changing a field marks it dirty, and Hibernate flushes an `UPDATE` at commit —
 `save()` call is strictly required. The services call `save()` anyway, because it makes
 the intent obvious to a reader who does not know that rule.
 
-### Cascade
+### No cascade — and why that is the point
 
 ```java
-@OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, orphanRemoval = true)
+@OneToMany(mappedBy = "employee")
 private List<LeaveRequest> leaveRequests = new ArrayList<>();
 ```
 
 `mappedBy` marks this as the **inverse** side — `LeaveRequest.employee` owns the
-foreign key, so this side creates no extra column. `cascade` and `orphanRemoval` mean
-deleting an employee deletes their leave requests, instead of the database rejecting
-the delete with a foreign-key violation.
+foreign key, so this side creates no extra column.
+
+There is deliberately **no `cascade` and no `orphanRemoval`**. An earlier version had
+`cascade = CascadeType.ALL, orphanRemoval = true`, which is the reflex answer to
+"deleting an employee fails on a foreign-key constraint". It is the wrong answer here.
+
+A leave request is not merely data *about* a person. It is the record of a decision the
+company made: who asked for what, who approved it, and when. HR has to be able to
+answer "how much leave did this person take in 2026?" long after they have left, for
+payroll and for audit. Cascading the delete would erase exactly the evidence that
+matters, and it would do it silently.
+
+So `DELETE /api/employees/{id}` performs a **soft delete** instead:
+
+```java
+employee.setDeleted(true);
+employee.setActive(false);   // archived implies no access
+employeeRepository.save(employee);
+```
+
+Removing the cascade also makes the safe behaviour the *default*. If someone later
+calls `employeeRepository.delete(...)` directly — bypassing the service — PostgreSQL
+now rejects it with a foreign-key violation rather than quietly destroying history. The
+database becomes the last line of defence, not an accomplice.
+
+**Consequences that follow from the flag**
+
+| Concern | How it is handled |
+|---|---|
+| Staff list | `findByDeletedFalseOrderByNameAsc()` — archived rows are hidden by default |
+| Reaching an archived record | `GET /api/employees?includeArchived=true` |
+| Login | `active` is forced to `false`, so the existing active check blocks them |
+| Editing | `update()` throws `400` — an archived record is history, not a live row |
+| Headcount | `DashboardService` uses `countByDeletedFalse()`, not `count()` |
+| Leave history | Untouched. It is still returned by every `/api/leaves` endpoint |
+
+**Adding the column to a live table.** `ddl-auto: update` can only add a `NOT NULL`
+column to a table that already has rows if the column has a default, hence:
+
+```java
+@Column(columnDefinition = "boolean not null default false")
+private boolean deleted = false;
+```
+
+Without the `default false`, Hibernate would try `ALTER TABLE ... ADD COLUMN deleted
+boolean not null` and PostgreSQL would refuse it on any existing employee row.
+
+**Why the verb is still `DELETE`.** `DELETE` is the REST verb for "remove this from the
+collection", which is precisely what the caller means and what the assignment
+specifies. Whether removal is implemented as a row deletion or a flag is the server's
+business. Renaming the endpoint to `/archive` would leak an implementation detail into
+the public contract.
+
+**Laravel comparison.** This is what `SoftDeletes` gives you for free: a `deleted_at`
+column, a global scope that hides trashed rows, and `withTrashed()` to see them. Spring
+Data has no equivalent built in, so the three pieces are written by hand — the flag, the
+`findByDeletedFalse...` queries, and the `includeArchived` parameter. Hibernate's
+`@SQLDelete` + `@Where` can approximate it, but a hidden global filter is a trap the
+first time you genuinely need the archived rows, so an explicit boolean is clearer here.
+
+`EmployeeServiceTest` pins the behaviour down:
+
+```java
+verify(employeeRepository, never()).delete(any(Employee.class));
+verify(employeeRepository, never()).deleteById(any(Long.class));
+```
+
+If anyone ever swaps the soft delete back for a real one, that test fails immediately
+rather than the loss being discovered months later when someone asks for a leave report.
 
 ---
 

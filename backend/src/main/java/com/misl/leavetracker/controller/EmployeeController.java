@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -50,10 +51,17 @@ public class EmployeeController {
         this.employeeService = employeeService;
     }
 
-    /** GET /api/employees -> 200 with the full list. */
+    /**
+     * GET /api/employees            -> the current roster
+     * GET /api/employees?includeArchived=true -> roster plus archived staff
+     *
+     * defaultValue makes the parameter optional, so the plain URL keeps working
+     * exactly as before and existing clients need no change.
+     */
     @GetMapping
-    public ResponseEntity<List<EmployeeResponse>> getAll() {
-        return ResponseEntity.ok(employeeService.findAll());
+    public ResponseEntity<List<EmployeeResponse>> getAll(
+            @RequestParam(defaultValue = "false") boolean includeArchived) {
+        return ResponseEntity.ok(employeeService.findAll(includeArchived));
     }
 
     /**
@@ -89,7 +97,9 @@ public class EmployeeController {
 
     /**
      * DELETE /api/employees/{id} -> 204 No Content.
-     * 204 rather than 200 because there is no body to return.
+     *
+     * Archives the employee rather than erasing the row: their leave history is
+     * preserved. See EmployeeService.delete for why.
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
