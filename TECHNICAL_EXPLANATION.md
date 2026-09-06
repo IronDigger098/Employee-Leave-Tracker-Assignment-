@@ -126,6 +126,14 @@ Everything that could be got wrong lives here, so it holds regardless of caller:
 
 - **Cross-field validation** — `endDate` before `startDate` compares two fields, so
   no per-field annotation can express it
+- **Not in the past** — `startDate` may not precede today. Worth noting *why* this is
+  a service rule and not `@FutureOrPresent` on the DTO: the annotation exists and
+  would work, but every other date rule here already lives in the service, and
+  splitting them across two layers means a reader has to look in two places to learn
+  what a valid request is. The client mirrors it with a real Angular validator, not
+  the `min` attribute on the date input — Angular sets `novalidate` on forms it
+  manages, so `min` only greys out days in the native picker and a typed value walks
+  straight past it
 - **State transitions** — "only a `PENDING` request may be reviewed" depends on what
   is currently in the database, which the incoming payload cannot know
 - **Ownership** — "is this row yours?" requires the row to be loaded first

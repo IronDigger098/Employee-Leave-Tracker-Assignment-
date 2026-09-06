@@ -32,8 +32,11 @@
       <div class="field">
         <label for="startDate">Start Date</label>
         <input id="startDate" type="date" formControlName="startDate" [min]="today" />
-        @if (hasError('startDate')) {
+        @if (form.controls.startDate.touched && form.controls.startDate.hasError('required')) {
           <small class="field-error">Start date is required</small>
+        }
+        @if (form.controls.startDate.hasError('pastDate')) {
+          <small class="field-error">Leave cannot start in the past.</small>
         }
       </div>
 

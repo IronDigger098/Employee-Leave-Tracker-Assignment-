@@ -366,6 +366,7 @@ A single-day leave (`startDate == endDate`) is valid.
 | Code | Cause |
 |---|---|
 | `400` | `"End date must not be before start date"`, or a `fieldErrors` object |
+| `400` | `"Leave cannot start in the past. The earliest allowed start date is 2026-09-06."` |
 | `400` | `"These dates overlap an existing APPROVED request from 2026-09-21 to 2026-09-29."` |
 | `400` | `"This request is 5 day(s), but you have only 2 of your 27 annual leave days remaining for 2026."` |
 
@@ -373,6 +374,10 @@ Three rules here live in the service rather than in annotations, because none of
 can be expressed per-field:
 
 - **Date range** compares two fields, so no single-field annotation can see both.
+- **Not in the past** — `startDate` may not be earlier than today. Today itself is
+  accepted, so applying on the morning you need off works. This applies to every
+  leave type including `SICK`; a real HR system would usually allow retroactive sick
+  leave, which would be a per-type rule rather than one blanket check.
 - **No overlapping dates** depends on the employee's *other* rows. Two ranges clash
   when `existing.start <= new.end AND existing.end >= new.start` — inclusive at both
   ends, so a leave starting the day after another ends is fine, but sharing even one

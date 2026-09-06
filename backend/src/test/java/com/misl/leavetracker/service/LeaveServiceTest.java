@@ -58,6 +58,20 @@ class LeaveServiceTest {
      * compiler never has to box a primitive at the call site - as well as giving
      * each id a name instead of a bare number scattered through the file.
      */
+    /**
+     * All test dates are expressed relative to today.
+     *
+     * LeaveService now rejects a start date in the past, so hard-coded calendar
+     * dates would quietly become invalid as time passed and the suite would start
+     * failing for reasons unrelated to the code. BASE sits comfortably in the
+     * future and every date is an offset from it.
+     */
+    private static final LocalDate BASE = LocalDate.now().plusDays(10);
+
+    private static LocalDate day(int offsetFromBase) {
+        return BASE.plusDays(offsetFromBase);
+    }
+
     private static final Long LEAVE_ID = 1L;
     private static final Long UNKNOWN_LEAVE_ID = 99L;
     private static final Long ADMIN_ID = 1L;
@@ -102,7 +116,7 @@ class LeaveServiceTest {
     private LeaveRequest pendingLeaveOwnedBy(Employee owner) {
         LeaveRequest leaveRequest = new LeaveRequest(
                 owner, LeaveType.CASUAL,
-                LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 12),
+                day(0), day(2),
                 "Family function");
         leaveRequest.setId(LEAVE_ID);
         return leaveRequest;
@@ -171,7 +185,7 @@ class LeaveServiceTest {
     @DisplayName("create() rejects an end date earlier than the start date")
     void createRejectsBackwardsDateRange() {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
-        LeaveRequestDto backwards = dto(LocalDate.of(2026, 9, 20), LocalDate.of(2026, 9, 15));
+        LeaveRequestDto backwards = dto(day(10), day(5));
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
 
         assertThatThrownBy(() -> leaveService.create(backwards, currentUser))
@@ -188,7 +202,7 @@ class LeaveServiceTest {
     @DisplayName("create() accepts a single-day leave where start equals end")
     void createAcceptsSingleDayLeave() {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
-        LocalDate sameDay = LocalDate.of(2026, 9, 10);
+        LocalDate sameDay = day(0);
 
         stubNoOverlap();
         stubExistingLeave();
@@ -213,7 +227,7 @@ class LeaveServiceTest {
         stubSaveReturnsArgument();
 
         LeaveResponse response = leaveService.create(
-                dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 12)),
+                dto(day(0), day(2)),
                 new EmployeeUserDetails(rahim));
 
         assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
@@ -279,12 +293,48 @@ class LeaveServiceTest {
         when(leaveRequestRepository.findByIdWithEmployee(LEAVE_ID))
                 .thenReturn(Optional.of(approved));
 
-        LeaveRequestDto edit = dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 11));
+        LeaveRequestDto edit = dto(day(0), day(1));
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
 
         assertThatThrownBy(() -> leaveService.update(LEAVE_ID, edit, currentUser))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Only a PENDING leave request can be edited");
+    }
+
+    @Test
+    @DisplayName("create() rejects a start date in the past")
+    void createRejectsPastStartDate() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+        EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
+        LeaveRequestDto backdated =
+                dto(LocalDate.now().minusDays(3), LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() -> leaveService.create(backdated, currentUser))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Leave cannot start in the past");
+
+        // Rejected before any query runs - the dates alone settle it.
+        verify(leaveRequestRepository, never())
+                .findOverlapping(any(Long.class), any(), any(LocalDate.class), any(LocalDate.class));
+        verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
+    }
+
+    @Test
+    @DisplayName("create() accepts leave that starts today")
+    void createAcceptsLeaveStartingToday() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+        LocalDate today = LocalDate.now();
+
+        stubNoOverlap();
+        stubExistingLeave();
+        when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
+        stubSaveReturnsArgument();
+
+        // Only isBefore(today) is rejected, so applying on the day itself is allowed.
+        LeaveResponse response = leaveService.create(
+                dto(today, today.plusDays(1)), new EmployeeUserDetails(rahim));
+
+        assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
     }
 
     // --------------------------------------------------- 4. overlapping dates
@@ -296,19 +346,19 @@ class LeaveServiceTest {
 
         // Already holds 21-29 Sep; now asks for 25 Sep - 1 Oct. They share 25-29 Sep.
         LeaveRequest existing = new LeaveRequest(rahim, LeaveType.ANNUAL,
-                LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 29), "Earlier leave");
+                day(11), day(19), "Earlier leave");
         existing.setId(10L);
         existing.setStatus(LeaveStatus.APPROVED);
         stubOverlapping(existing);
 
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
-        LeaveRequestDto clashing = dto(LocalDate.of(2026, 9, 25), LocalDate.of(2026, 10, 1));
+        LeaveRequestDto clashing = dto(day(15), day(21));
 
         assertThatThrownBy(() -> leaveService.create(clashing, currentUser))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("overlap an existing APPROVED request")
-                .hasMessageContaining("2026-09-21")
-                .hasMessageContaining("2026-09-29");
+                .hasMessageContaining(day(11).toString())
+                .hasMessageContaining(day(19).toString());
 
         verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
     }
@@ -319,13 +369,13 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
 
         LeaveRequest existing = new LeaveRequest(rahim, LeaveType.ANNUAL,
-                LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 29), "Earlier leave");
+                day(11), day(19), "Earlier leave");
         existing.setId(10L);
         existing.setStatus(LeaveStatus.APPROVED);
         stubOverlapping(existing);
 
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
-        LeaveRequestDto clashing = dto(LocalDate.of(2026, 9, 25), LocalDate.of(2026, 10, 1));
+        LeaveRequestDto clashing = dto(day(15), day(21));
 
         assertThatThrownBy(() -> leaveService.create(clashing, currentUser))
                 .hasMessageContaining("overlap");
@@ -353,7 +403,7 @@ class LeaveServiceTest {
         stubSaveReturnsArgument();
 
         LeaveResponse response = leaveService.create(
-                dto(LocalDate.of(2026, 9, 30), LocalDate.of(2026, 10, 2)),
+                dto(day(20), day(22)),
                 new EmployeeUserDetails(rahim));
 
         assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
@@ -368,12 +418,12 @@ class LeaveServiceTest {
 
         // 20 days already booked, 7 remaining, asking for 5.
         stubNoOverlap();
-        stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 20));
+        stubExistingLeave(bookedLeave(rahim, 10L, BASE.minusMonths(6), 20));
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
 
         LeaveResponse response = leaveService.create(
-                dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 14)),
+                dto(day(0), day(4)),
                 new EmployeeUserDetails(rahim));
 
         assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
@@ -386,9 +436,9 @@ class LeaveServiceTest {
 
         // 25 days already booked, 2 remaining, asking for 5.
         stubNoOverlap();
-        stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 25));
+        stubExistingLeave(bookedLeave(rahim, 10L, BASE.minusMonths(6), 25));
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
-        LeaveRequestDto tooLong = dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 14));
+        LeaveRequestDto tooLong = dto(day(0), day(4));
 
         assertThatThrownBy(() -> leaveService.create(tooLong, currentUser))
                 .isInstanceOf(BadRequestException.class)
@@ -405,12 +455,12 @@ class LeaveServiceTest {
 
         // 25 booked + 2 requested = exactly 27. The limit is inclusive.
         stubNoOverlap();
-        stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 25));
+        stubExistingLeave(bookedLeave(rahim, 10L, BASE.minusMonths(6), 25));
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
 
         LeaveResponse response = leaveService.create(
-                dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 11)),
+                dto(day(0), day(1)),
                 new EmployeeUserDetails(rahim));
 
         assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
@@ -427,7 +477,7 @@ class LeaveServiceTest {
          * Extending it to 26 days must succeed: without the exclusion the service
          * would read 25 already used and refuse anything over 2.
          */
-        LeaveRequest sameRequestAsStored = bookedLeave(rahim, LEAVE_ID, LocalDate.of(2026, 9, 1), 25);
+        LeaveRequest sameRequestAsStored = bookedLeave(rahim, LEAVE_ID, day(-9), 25);
 
         when(leaveRequestRepository.findByIdWithEmployee(LEAVE_ID)).thenReturn(Optional.of(existing));
         stubOverlapping(sameRequestAsStored);   // the only clash is the request itself
@@ -436,10 +486,10 @@ class LeaveServiceTest {
 
         LeaveResponse response = leaveService.update(
                 LEAVE_ID,
-                dto(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 26)),
+                dto(day(-9), day(16)),
                 new EmployeeUserDetails(rahim));
 
-        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(response.getStartDate()).isEqualTo(day(-9));
     }
 
     // ------------------------------------------------------------ 3. ownership

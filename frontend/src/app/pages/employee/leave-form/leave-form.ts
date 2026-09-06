@@ -20,6 +20,16 @@ import { LeaveService } from '../../../core/services/leave.service';
  * Returning null means valid; returning an object marks the group invalid with
  * that key.
  */
+const notInPastValidator = (control: AbstractControl): ValidationErrors | null => {
+  const value = control.value as string;
+  if (!value) {
+    return null; // Validators.required already covers an empty field
+  }
+  // Both are yyyy-MM-dd, and ISO date strings compare correctly as strings.
+  const today = new Date().toISOString().substring(0, 10);
+  return value < today ? { pastDate: true } : null;
+};
+
 const dateRangeValidator = (group: AbstractControl): ValidationErrors | null => {
   const start = group.get('startDate')?.value;
   const end = group.get('endDate')?.value;
@@ -140,7 +150,13 @@ export class LeaveForm implements OnInit {
   readonly form = this.formBuilder.nonNullable.group(
     {
       leaveType: ['CASUAL' as LeaveType, [Validators.required]],
-      startDate: ['', [Validators.required]],
+      /*
+       * notInPastValidator is a REAL validator, unlike the [min] attribute on the
+       * input. Angular puts novalidate on forms it manages, so the browser's own
+       * min enforcement never runs; [min] only greys out earlier dates in the
+       * native picker, which a typed or pasted value walks straight past.
+       */
+      startDate: ['', [Validators.required, notInPastValidator]],
       endDate: ['', [Validators.required]],
       reason: ['', [Validators.required, Validators.maxLength(500)]],
     },

@@ -214,10 +214,34 @@ public class LeaveService {
         }
     }
 
-    /** A single-day leave (start == end) is valid; only end BEFORE start is rejected. */
+    /**
+     * Date sanity, in two parts.
+     *
+     * A single-day leave (start == end) is valid; only end BEFORE start is rejected.
+     *
+     * Leave also may not begin in the past. Without this an employee could book
+     * days that have already gone by - which consumes entitlement, produces
+     * approvals for dates nobody can act on, and is an obvious way to quietly
+     * absorb an unexplained absence after the fact.
+     *
+     * Today itself is allowed: applying on the morning of the day you need off is
+     * reasonable, and only `isBefore` is rejected.
+     *
+     * Note this forbids backdating for EVERY leave type, including SICK. A real HR
+     * system usually does allow retroactive sick leave, since illness is not
+     * planned - that would be a per-type rule (allow SICK to start in the past,
+     * perhaps within a bounded window, and forbid it for CASUAL and ANNUAL). It is
+     * left as one simple rule here rather than a policy engine.
+     */
     private void validateDates(LeaveRequestDto dto) {
         if (dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BadRequestException("End date must not be before start date");
+        }
+
+        LocalDate today = LocalDate.now();
+        if (dto.getStartDate().isBefore(today)) {
+            throw new BadRequestException(
+                    "Leave cannot start in the past. The earliest allowed start date is " + today + ".");
         }
     }
 
