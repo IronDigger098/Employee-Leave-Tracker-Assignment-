@@ -23,12 +23,12 @@ docker compose up --build
 | Employee Management | Leave Review |
 |---|---|
 | ![Employee management](docs/screenshots/03-admin-employees.png) | ![Leave review](docs/screenshots/04-admin-leaves.png) |
-| Full CRUD. The same form handles create and edit; on edit a blank password keeps the existing one. | Every request in the system, filterable by status. Approve / Reject appear only on `PENDING` rows. |
+| One form handles create and edit; on edit a blank password keeps the existing one. **Show archived** reveals former staff, whose leave history is kept. | Every request in the system, filterable by status. Approve / Reject appear only on `PENDING` rows. |
 
 | Employee Dashboard | Apply for Leave |
 |---|---|
 | ![Employee dashboard](docs/screenshots/05-employee-dashboard.png) | ![Apply for leave](docs/screenshots/06-employee-apply-leave.png) |
-| Personal counters only — scoped by the employee id inside the JWT. | Reactive form with a cross-field rule: `endDate` may not precede `startDate`. |
+| Personal counters plus the remaining annual balance — scoped by the employee id inside the JWT. | Reactive form with cross-field rules: no past start date, no overlap with an existing request, and the 27-day balance checked before submitting. |
 
 | My Leave Requests |
 |---|
@@ -72,6 +72,10 @@ docker compose up --build
   past the limit. The remaining balance is shown on the employee dashboard and on
   the apply form
 - A deactivated employee (`active = false`) cannot log in
+- **Deleting an employee archives them; their leave history is never destroyed**, so
+  HR can still trace what a former employee took
+- **The last active administrator cannot be removed** — not by archiving, not by
+  demotion, not by deactivation — and no admin may archive their own account
 
 ---
 
@@ -102,18 +106,21 @@ employee-leave-tracker/
 ├── backend/
 │   ├── Dockerfile                # multi-stage: maven build -> JRE runtime
 │   ├── pom.xml
-│   └── src/main/
-│       ├── java/com/misl/leavetracker/
-│       │   ├── LeaveTrackerApplication.java
-│       │   ├── config/           # DataSeeder (demo data)
-│       │   ├── controller/       # HTTP layer — Auth, Employee, Leave, Dashboard
-│       │   ├── service/          # business rules and authorization
-│       │   ├── repository/       # Spring Data JPA interfaces
-│       │   ├── entity/           # Employee, LeaveRequest + enums
-│       │   ├── dto/              # request/response shapes
-│       │   ├── security/         # JWT filter, security config, UserDetails
-│       │   └── exception/        # custom exceptions + global handler
-│       └── resources/application.yml
+│   ├── src/main/
+│   │   ├── java/com/misl/leavetracker/
+│   │   │   ├── LeaveTrackerApplication.java
+│   │   │   ├── config/           # DataSeeder (demo data), OpenApiConfig (Swagger)
+│   │   │   ├── controller/       # HTTP layer — Auth, Employee, Leave, Dashboard
+│   │   │   ├── service/          # business rules and authorization
+│   │   │   ├── repository/       # Spring Data JPA interfaces
+│   │   │   ├── entity/           # Employee, LeaveRequest + enums
+│   │   │   ├── dto/              # request/response shapes
+│   │   │   ├── security/         # JWT filter, security config, UserDetails
+│   │   │   └── exception/        # custom exceptions + global handler
+│   │   └── resources/application.yml
+│   └── src/test/java/com/misl/leavetracker/
+│       ├── service/              # LeaveServiceTest, EmployeeServiceTest
+│       └── security/             # JwtServiceTest
 │
 └── frontend/
     ├── Dockerfile                # multi-stage: node build -> nginx
@@ -193,6 +200,7 @@ Two tables, one relationship.
 | `designation` | VARCHAR(100) | |
 | `role` | VARCHAR(20) | `ADMIN` \| `EMPLOYEE` |
 | `active` | BOOLEAN | inactive employees cannot log in |
+| `deleted` | BOOLEAN | `not null default false` — archived (soft-deleted) employees |
 
 **`leave_requests`**
 
@@ -484,11 +492,11 @@ machine with nothing installed but a JDK. The Docker image build uses
 Seeded automatically on first start, **only when the database is empty**
 (`DataSeeder` checks the row count first, so restarting never duplicates data).
 
-| Role | Email | Password |
-|---|---|---|
-| ADMIN | `admin@misl.com` | `admin123` |
-| EMPLOYEE | `rahim@misl.com` | `employee123` |
-| EMPLOYEE | `karim@misl.com` | `employee123` |
+| Role | Name | Email | Password |
+|---|---|---|---|
+| ADMIN | Bishal Roy | `admin@misl.com` | `admin123` |
+| EMPLOYEE | Rahim Uddin | `rahim@misl.com` | `employee123` |
+| EMPLOYEE | Karim Hossain | `karim@misl.com` | `employee123` |
 
 > These are **development / demo credentials only**. They exist so the application
 > can be evaluated without manual setup, and would never ship in a real deployment.
