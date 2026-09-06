@@ -129,6 +129,16 @@ Everything that could be got wrong lives here, so it holds regardless of caller:
 - **State transitions** — "only a `PENDING` request may be reviewed" depends on what
   is currently in the database, which the incoming payload cannot know
 - **Ownership** — "is this row yours?" requires the row to be loaded first
+- **No overlapping dates** — a new request may not clash with one the employee
+  already holds. The repository asks for rows where
+  `existing.startDate <= newEnd AND existing.endDate >= newStart`, which is easiest
+  to trust as the negation of "one range finishes before the other begins". Both
+  comparisons are inclusive, so back-to-back leaves are allowed and same-day ones
+  are not. This check runs **before** the entitlement check, and the ordering is
+  load-bearing: the entitlement sums the length of each request, which only measures
+  real days off if no two requests cover the same day. Without the overlap rule,
+  21–29 Sep plus 25 Sep–1 Oct would be charged as 9 + 7 = 16 days for what is really
+  11 days away from work
 - **Annual entitlement** — 27 days per calendar year. This one depends on the
   employee's *other* rows: the service sums every `APPROVED` and `PENDING` request
   whose start date falls in that year and refuses anything that would push the total

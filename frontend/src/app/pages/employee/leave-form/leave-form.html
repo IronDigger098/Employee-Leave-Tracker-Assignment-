@@ -54,7 +54,13 @@
       <div class="alert alert-error">End date must not be before start date.</div>
     } @else if (requestedDays > 0) {
       <!-- Live feedback as the dates change, so the length is never a surprise -->
-      @if (exceedsBalance) {
+      @if (clashingLeave; as clash) {
+        <div class="alert alert-error">
+          These dates overlap an existing <strong>{{ clash.status }}</strong> request
+          from {{ clash.startDate | date: 'mediumDate' }} to
+          {{ clash.endDate | date: 'mediumDate' }}. You cannot be on two leaves at once.
+        </div>
+      } @else if (exceedsBalance) {
         <div class="alert alert-error">
           This request is <strong>{{ requestedDays }}</strong> day(s), which is more
           than the {{ stats()?.leaveDaysRemaining }} you have remaining this year.
@@ -79,7 +85,7 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit" class="btn btn-primary" [disabled]="submitting() || exceedsBalance">
+      <button type="submit" class="btn btn-primary" [disabled]="submitting() || blocked">
         {{ submitting() ? 'Submitting...' : 'Submit Request' }}
       </button>
       <button type="button" class="btn btn-secondary" (click)="cancel()">Cancel</button>

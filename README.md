@@ -62,6 +62,10 @@ docker compose up --build
 - Only an `ADMIN` may manage employees or review leave requests
 - A leave request can only be approved, rejected or edited while it is `PENDING`
 - `endDate` may not be earlier than `startDate`
+- **A new request may not overlap one the employee already holds** (approved or
+  pending). Nobody can be on two leaves on the same day, and forbidding overlap is
+  also what keeps the entitlement arithmetic honest — without it, 21–29 Sep plus
+  25 Sep–1 Oct would charge 16 days for 11 days actually off
 - **Each employee may take at most 27 leave days per calendar year.** Approved and
   pending days both count, so a queue of unreviewed requests cannot be used to slip
   past the limit. The remaining balance is shown on the employee dashboard and on

@@ -366,9 +366,27 @@ A single-day leave (`startDate == endDate`) is valid.
 | Code | Cause |
 |---|---|
 | `400` | `"End date must not be before start date"`, or a `fieldErrors` object |
+| `400` | `"These dates overlap an existing APPROVED request from 2026-09-21 to 2026-09-29."` |
+| `400` | `"This request is 5 day(s), but you have only 2 of your 27 annual leave days remaining for 2026."` |
 
-The date-range rule is checked in the service rather than by an annotation, because it
-compares two fields — a per-field annotation can only see its own value.
+Three rules here live in the service rather than in annotations, because none of them
+can be expressed per-field:
+
+- **Date range** compares two fields, so no single-field annotation can see both.
+- **No overlapping dates** depends on the employee's *other* rows. Two ranges clash
+  when `existing.start <= new.end AND existing.end >= new.start` — inclusive at both
+  ends, so a leave starting the day after another ends is fine, but sharing even one
+  day is not. Only `APPROVED` and `PENDING` requests block; a rejected one does not.
+- **Annual entitlement** — 27 days per calendar year, counted inclusively (10 Sep to
+  12 Sep is 3 days). A request belongs to the year of its start date, and both
+  `APPROVED` and `PENDING` requests consume the allowance, so a queue of unreviewed
+  requests cannot be used to exceed it.
+
+The overlap check runs **before** the entitlement check. The entitlement sums the
+length of each request, which is only a true measure of days off if no two requests
+cover the same day — so ruling out overlap first is what makes that arithmetic sound.
+Without it, 21–29 Sep plus 25 Sep–1 Oct would be charged as 16 days for 11 days
+actually away from work.
 
 ---
 
@@ -383,6 +401,7 @@ Edit a request. Only the **owner**, and only while the status is `PENDING`.
 | Code | Cause |
 |---|---|
 | `400` | `"Only a PENDING leave request can be edited. This request is already APPROVED"` |
+| `400` | The new dates overlap a different request. The request being edited is excluded from the check, so it never conflicts with itself |
 | `400` | The edit would exceed the annual entitlement. The request's own current days are excluded from the total, so extending a leave by one day is measured as one extra day, not the whole thing again |
 | `403` | Not the owner |
 | `404` | No leave request with that id |

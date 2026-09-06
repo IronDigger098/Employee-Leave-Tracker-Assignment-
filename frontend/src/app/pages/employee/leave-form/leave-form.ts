@@ -1,9 +1,10 @@
+import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { DashboardStats } from '../../../core/models/employee.model';
-import { LEAVE_TYPES, LeaveType } from '../../../core/models/leave.model';
+import { LEAVE_TYPES, LeaveRequest, LeaveType } from '../../../core/models/leave.model';
 import { EmployeeService } from '../../../core/services/employee.service';
 import { LeaveService } from '../../../core/services/leave.service';
 
@@ -39,7 +40,7 @@ const dateRangeValidator = (group: AbstractControl): ValidationErrors | null => 
  */
 @Component({
   selector: 'app-leave-form',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, DatePipe],
   templateUrl: './leave-form.html',
 })
 export class LeaveForm implements OnInit {
@@ -57,6 +58,13 @@ export class LeaveForm implements OnInit {
   readonly stats = signal<DashboardStats | null>(null);
 
   /**
+   * The employee's existing requests, used to warn about a date clash before they
+   * submit. Only PENDING and APPROVED can clash - a rejected leave blocks nothing,
+   * which is the same rule the server applies.
+   */
+  private readonly myLeaves = signal<LeaveRequest[]>([]);
+
+  /**
    * Fetch the balance when the page opens.
    *
    * If it fails we simply do not show the hint - the form still works, and the
@@ -68,6 +76,33 @@ export class LeaveForm implements OnInit {
       next: (stats) => this.stats.set(stats),
       error: () => this.stats.set(null),
     });
+
+    this.leaveService.findMine().subscribe({
+      next: (leaves) =>
+        this.myLeaves.set(leaves.filter((leave) => leave.status !== 'REJECTED')),
+      error: () => this.myLeaves.set([]),
+    });
+  }
+
+  /**
+   * The existing request the chosen dates clash with, or null.
+   *
+   * Same overlap test as the server's repository query, and it reads more clearly
+   * as its negation: two ranges do NOT overlap when one ends before the other
+   * starts. Anything else is a clash.
+   *
+   * ISO date strings compare correctly with <= and >=, so no Date objects needed.
+   */
+  get clashingLeave(): LeaveRequest | null {
+    const { startDate, endDate } = this.form.getRawValue();
+    if (!startDate || !endDate || endDate < startDate) {
+      return null;
+    }
+    return (
+      this.myLeaves().find(
+        (leave) => leave.startDate <= endDate && leave.endDate >= startDate,
+      ) ?? null
+    );
   }
 
   /**
@@ -92,6 +127,11 @@ export class LeaveForm implements OnInit {
   get exceedsBalance(): boolean {
     const balance = this.stats();
     return balance !== null && this.requestedDays > balance.leaveDaysRemaining;
+  }
+
+  /** Any reason the form should not be submittable, beyond ordinary validation. */
+  get blocked(): boolean {
+    return this.exceedsBalance || this.clashingLeave !== null;
   }
 
   /** Today as yyyy-MM-dd, used as the `min` on the date inputs. */

@@ -4,6 +4,7 @@ import com.misl.leavetracker.entity.LeaveRequest;
 import com.misl.leavetracker.entity.LeaveStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -62,6 +63,37 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
      */
     List<LeaveRequest> findByEmployeeIdAndStatusInAndStartDateBetween(
             Long employeeId, Collection<LeaveStatus> statuses, LocalDate from, LocalDate to);
+
+    /**
+     * Requests by this employee whose dates clash with the range [start, end].
+     *
+     * The overlap test is the standard one, and it is easier to trust by writing
+     * down when two ranges DO NOT overlap: either the existing one finishes before
+     * the new one starts, or it begins after the new one ends. Negate that and you
+     * get the condition below:
+     *
+     *     existing.startDate <= newEnd  AND  existing.endDate >= newStart
+     *
+     * Both comparisons are inclusive, so ranges that merely touch - one ending on
+     * the same day the next begins - still count as a clash. That is correct here:
+     * an employee cannot be on two different leaves on the same day.
+     *
+     * Written as an explicit @Query rather than a derived method name. The derived
+     * equivalent would be
+     * findByEmployeeIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual,
+     * which is technically fine and practically unreadable.
+     */
+    @Query("""
+            SELECT l FROM LeaveRequest l
+            WHERE l.employee.id = :employeeId
+              AND l.status IN :statuses
+              AND l.startDate <= :end
+              AND l.endDate >= :start
+            """)
+    List<LeaveRequest> findOverlapping(@Param("employeeId") Long employeeId,
+                                       @Param("statuses") Collection<LeaveStatus> statuses,
+                                       @Param("start") LocalDate start,
+                                       @Param("end") LocalDate end);
 
     /** Dashboard counters (used in Phase 4). */
     long countByStatus(LeaveStatus status);

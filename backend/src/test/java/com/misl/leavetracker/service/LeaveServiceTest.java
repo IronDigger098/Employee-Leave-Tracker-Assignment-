@@ -34,13 +34,14 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for the business rules in {@link LeaveService}.
  *
- * These target exactly the four kinds of rule that no annotation can express,
+ * These target exactly the five kinds of rule that no annotation can express,
  * which is precisely why they are the rules worth testing:
  *
  *   1. cross-field validation  - endDate must not precede startDate
  *   2. state transitions       - only a PENDING request may be edited or reviewed
  *   3. ownership               - an employee may only touch their own requests
- *   4. annual entitlement      - depends on the employee's other rows for the year
+ *   4. no overlapping dates    - depends on the employee's other rows
+ *   5. annual entitlement      - depends on the employee's other rows for the year
  *
  * Deliberately NOT @SpringBootTest. These are plain unit tests: the repositories
  * are Mockito mocks, so no Spring context starts and no database is needed. They
@@ -141,6 +142,20 @@ class LeaveServiceTest {
                 .thenReturn(List.of(existing));
     }
 
+    /** The overlap query finds nothing - the dates are free. */
+    private void stubNoOverlap() {
+        when(leaveRequestRepository.findOverlapping(
+                any(Long.class), any(), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of());
+    }
+
+    /** The overlap query returns these clashing requests. */
+    private void stubOverlapping(LeaveRequest... clashes) {
+        when(leaveRequestRepository.findOverlapping(
+                any(Long.class), any(), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(clashes));
+    }
+
     /** A previously booked leave of the given length, owned by the given employee. */
     private LeaveRequest bookedLeave(Employee owner, Long id, LocalDate start, int days) {
         LeaveRequest leaveRequest = new LeaveRequest(
@@ -175,6 +190,7 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
         LocalDate sameDay = LocalDate.of(2026, 9, 10);
 
+        stubNoOverlap();
         stubExistingLeave();
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
@@ -191,6 +207,7 @@ class LeaveServiceTest {
     void createAlwaysStartsPendingAndOwnedByCaller() {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
 
+        stubNoOverlap();
         stubExistingLeave();
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
@@ -270,7 +287,79 @@ class LeaveServiceTest {
                 .hasMessageContaining("Only a PENDING leave request can be edited");
     }
 
-    // ------------------------------------------- 4. annual leave entitlement
+    // --------------------------------------------------- 4. overlapping dates
+
+    @Test
+    @DisplayName("a request overlapping an existing one is refused")
+    void createRefusesOverlappingRequest() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+
+        // Already holds 21-29 Sep; now asks for 25 Sep - 1 Oct. They share 25-29 Sep.
+        LeaveRequest existing = new LeaveRequest(rahim, LeaveType.ANNUAL,
+                LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 29), "Earlier leave");
+        existing.setId(10L);
+        existing.setStatus(LeaveStatus.APPROVED);
+        stubOverlapping(existing);
+
+        EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
+        LeaveRequestDto clashing = dto(LocalDate.of(2026, 9, 25), LocalDate.of(2026, 10, 1));
+
+        assertThatThrownBy(() -> leaveService.create(clashing, currentUser))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("overlap an existing APPROVED request")
+                .hasMessageContaining("2026-09-21")
+                .hasMessageContaining("2026-09-29");
+
+        verify(leaveRequestRepository, never()).save(any(LeaveRequest.class));
+    }
+
+    @Test
+    @DisplayName("the overlap check runs before the entitlement check")
+    void overlapIsReportedBeforeEntitlement() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+
+        LeaveRequest existing = new LeaveRequest(rahim, LeaveType.ANNUAL,
+                LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 29), "Earlier leave");
+        existing.setId(10L);
+        existing.setStatus(LeaveStatus.APPROVED);
+        stubOverlapping(existing);
+
+        EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
+        LeaveRequestDto clashing = dto(LocalDate.of(2026, 9, 25), LocalDate.of(2026, 10, 1));
+
+        assertThatThrownBy(() -> leaveService.create(clashing, currentUser))
+                .hasMessageContaining("overlap");
+
+        /*
+         * Order matters, not just correctness. The entitlement sums the length of
+         * each request, which only measures real days off if no two requests cover
+         * the same day - so overlap must be ruled out first. Never reaching the
+         * entitlement query is what proves the ordering.
+         */
+        verify(leaveRequestRepository, never())
+                .findByEmployeeIdAndStatusInAndStartDateBetween(
+                        any(Long.class), any(), any(LocalDate.class), any(LocalDate.class));
+    }
+
+    @Test
+    @DisplayName("a request starting the day after an existing one ends is accepted")
+    void createAcceptsBackToBackRequest() {
+        Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
+
+        // Nothing clashes: the repository query itself excludes non-overlapping rows.
+        stubNoOverlap();
+        stubExistingLeave();
+        when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
+        stubSaveReturnsArgument();
+
+        LeaveResponse response = leaveService.create(
+                dto(LocalDate.of(2026, 9, 30), LocalDate.of(2026, 10, 2)),
+                new EmployeeUserDetails(rahim));
+
+        assertThat(response.getStatus()).isEqualTo(LeaveStatus.PENDING);
+    }
+
+    // ------------------------------------------- 5. annual leave entitlement
 
     @Test
     @DisplayName("a request within the remaining entitlement is accepted")
@@ -278,6 +367,7 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
 
         // 20 days already booked, 7 remaining, asking for 5.
+        stubNoOverlap();
         stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 20));
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
@@ -295,6 +385,7 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
 
         // 25 days already booked, 2 remaining, asking for 5.
+        stubNoOverlap();
         stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 25));
         EmployeeUserDetails currentUser = new EmployeeUserDetails(rahim);
         LeaveRequestDto tooLong = dto(LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 14));
@@ -313,6 +404,7 @@ class LeaveServiceTest {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
 
         // 25 booked + 2 requested = exactly 27. The limit is inclusive.
+        stubNoOverlap();
         stubExistingLeave(bookedLeave(rahim, 10L, LocalDate.of(2026, 3, 1), 25));
         when(employeeRepository.findById(RAHIM_ID)).thenReturn(Optional.of(rahim));
         stubSaveReturnsArgument();
@@ -338,6 +430,7 @@ class LeaveServiceTest {
         LeaveRequest sameRequestAsStored = bookedLeave(rahim, LEAVE_ID, LocalDate.of(2026, 9, 1), 25);
 
         when(leaveRequestRepository.findByIdWithEmployee(LEAVE_ID)).thenReturn(Optional.of(existing));
+        stubOverlapping(sameRequestAsStored);   // the only clash is the request itself
         stubExistingLeave(sameRequestAsStored);
         stubSaveReturnsArgument();
 

@@ -26,11 +26,12 @@ import java.util.Set;
 /**
  * Business logic for leave requests.
  *
- * Four kinds of rule live here, none of which an annotation can express:
+ * Five kinds of rule live here, none of which an annotation can express:
  *   1. endDate must not be before startDate            (spans two fields)
  *   2. only a PENDING request may be edited or reviewed (depends on stored state)
  *   3. an employee may only touch their OWN requests    (depends on who is asking)
- *   4. the annual entitlement may not be exceeded       (depends on other rows)
+ *   4. a request may not overlap another the employee holds (depends on other rows)
+ *   5. the annual entitlement may not be exceeded       (depends on other rows)
  *
  * Rule 3 is the one that matters most for the assessment. @PreAuthorize on the
  * controller can express "must be an ADMIN", but it cannot express "must be the
@@ -101,6 +102,7 @@ public class LeaveService {
     @Transactional
     public LeaveResponse create(LeaveRequestDto dto, EmployeeUserDetails currentUser) {
         validateDates(dto);
+        checkNoOverlap(currentUser.getId(), dto, null);
         checkAnnualEntitlement(currentUser.getId(), dto, null);
 
         Employee employee = employeeRepository.findById(currentUser.getId())
@@ -134,6 +136,7 @@ public class LeaveService {
                     + "This request is already " + leaveRequest.getStatus());
         }
         validateDates(dto);
+        checkNoOverlap(leaveRequest.getEmployee().getId(), dto, leaveRequest.getId());
         checkAnnualEntitlement(leaveRequest.getEmployee().getId(), dto, leaveRequest.getId());
 
         leaveRequest.setLeaveType(dto.getLeaveType());
@@ -254,6 +257,41 @@ public class LeaveService {
             total += lengthInDays(existing.getStartDate(), existing.getEndDate());
         }
         return total;
+    }
+
+    /**
+     * Refuses a request whose dates clash with one the employee already holds.
+     *
+     * Without this an employee could book 21-29 Sep and then 25 Sep-1 Oct, which is
+     * nonsense twice over: they cannot be on two separate leaves on 25-29 Sep, and
+     * the entitlement would be charged 9 + 7 = 16 days for what is really 11 days
+     * away from work.
+     *
+     * That second point is why this check has to run BEFORE the entitlement check.
+     * The entitlement sums the length of each request, which is only a correct
+     * measure of days-off if no two requests cover the same day. Forbidding overlap
+     * is what makes that arithmetic sound.
+     *
+     * REJECTED requests are ignored - a refused leave blocks nothing.
+     *
+     * @param excludeLeaveId the request being edited, or null when creating
+     */
+    private void checkNoOverlap(Long employeeId, LeaveRequestDto dto, Long excludeLeaveId) {
+        List<LeaveRequest> clashes = leaveRequestRepository.findOverlapping(
+                employeeId,
+                STATUSES_THAT_CONSUME_ENTITLEMENT,
+                dto.getStartDate(),
+                dto.getEndDate());
+
+        for (LeaveRequest clash : clashes) {
+            // Editing a request always "overlaps itself" - that is not a conflict.
+            if (excludeLeaveId != null && excludeLeaveId.equals(clash.getId())) {
+                continue;
+            }
+            throw new BadRequestException(String.format(
+                    "These dates overlap an existing %s request from %s to %s.",
+                    clash.getStatus(), clash.getStartDate(), clash.getEndDate()));
+        }
     }
 
     /**
