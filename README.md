@@ -13,6 +13,30 @@ docker compose up --build
 
 ---
 
+## Screenshots
+
+| Login | Admin Dashboard |
+|---|---|
+| ![Login page](docs/screenshots/01-login.png) | ![Admin dashboard](docs/screenshots/02-admin-dashboard.png) |
+| Email + password, with client-side validation mirroring the server's rules. | Company-wide counters from `GET /api/dashboard/admin`. |
+
+| Employee Management | Leave Review |
+|---|---|
+| ![Employee management](docs/screenshots/03-admin-employees.png) | ![Leave review](docs/screenshots/04-admin-leaves.png) |
+| Full CRUD. The same form handles create and edit; on edit a blank password keeps the existing one. | Every request in the system, filterable by status. Approve / Reject appear only on `PENDING` rows. |
+
+| Employee Dashboard | Apply for Leave |
+|---|---|
+| ![Employee dashboard](docs/screenshots/05-employee-dashboard.png) | ![Apply for leave](docs/screenshots/06-employee-apply-leave.png) |
+| Personal counters only — scoped by the employee id inside the JWT. | Reactive form with a cross-field rule: `endDate` may not precede `startDate`. |
+
+| My Leave Requests |
+|---|
+| ![My leave requests](docs/screenshots/07-employee-my-leaves.png) |
+| The employee's own requests and their status. Withdraw is offered only while `PENDING`. |
+
+---
+
 ## 1. Features
 
 **Admin**
