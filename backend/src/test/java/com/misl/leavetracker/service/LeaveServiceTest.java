@@ -528,7 +528,7 @@ class LeaveServiceTest {
     @DisplayName("findById() lets an admin read anybody's request")
     void adminCanReadAnyRequest() {
         Employee rahim = employee(RAHIM_ID, "Rahim", Role.EMPLOYEE);
-        Employee admin = employee(ADMIN_ID, "Ayesha", Role.ADMIN);
+        Employee admin = employee(ADMIN_ID, "Bishal", Role.ADMIN);
 
         when(leaveRequestRepository.findByIdWithEmployee(LEAVE_ID))
                 .thenReturn(Optional.of(pendingLeaveOwnedBy(rahim)));
@@ -560,7 +560,7 @@ class LeaveServiceTest {
     @Test
     @DisplayName("findById() throws ResourceNotFoundException for an unknown id")
     void unknownIdThrowsNotFound() {
-        Employee admin = employee(ADMIN_ID, "Ayesha", Role.ADMIN);
+        Employee admin = employee(ADMIN_ID, "Bishal", Role.ADMIN);
 
         when(leaveRequestRepository.findByIdWithEmployee(UNKNOWN_LEAVE_ID))
                 .thenReturn(Optional.empty());

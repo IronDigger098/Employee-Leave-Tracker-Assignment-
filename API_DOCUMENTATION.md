@@ -75,7 +75,7 @@ Validates credentials and returns a JWT. The only public endpoint.
 {
   "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbkBtaXNsLmNvbSIsImVtcGxveWVlSWQiOjEsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4ODU0MjMwMSwiZXhwIjoxNzg4NjI4NzAxfQ.xxxxx",
   "employeeId": 1,
-  "name": "Ayesha Rahman",
+  "name": "Bishal Roy",
   "email": "admin@misl.com",
   "role": "ADMIN"
 }
@@ -119,7 +119,7 @@ record.
   {
     "id": 1,
     "employeeCode": "ADM001",
-    "name": "Ayesha Rahman",
+    "name": "Bishal Roy",
     "email": "admin@misl.com",
     "department": "Human Resources",
     "designation": "HR Manager",

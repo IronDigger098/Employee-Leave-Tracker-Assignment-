@@ -62,7 +62,7 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Empty database detected - seeding demo data.");
 
         Employee admin = employeeRepository.save(new Employee(
-                "ADM001", "Ayesha Rahman", "admin@misl.com",
+                "ADM001", "Bishal Roy", "admin@misl.com",
                 passwordEncoder.encode("admin123"),
                 "Human Resources", "HR Manager", Role.ADMIN, true));
 

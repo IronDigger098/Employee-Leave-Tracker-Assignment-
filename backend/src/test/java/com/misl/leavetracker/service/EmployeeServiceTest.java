@@ -62,9 +62,9 @@ class EmployeeServiceTest {
         return employee;
     }
 
-    private Employee ayeshaTheAdmin() {
+    private Employee bishalTheAdmin() {
         Employee employee = new Employee(
-                "ADM001", "Ayesha Rahman", "admin@misl.com", "hashed",
+                "ADM001", "Bishal Roy", "admin@misl.com", "hashed",
                 "Human Resources", "HR Manager", Role.ADMIN, true);
         employee.setId(ADMIN_ID);
         return employee;
@@ -111,9 +111,9 @@ class EmployeeServiceTest {
     @Test
     @DisplayName("delete() refuses to archive the last active admin")
     void deleteRefusesTheLastAdmin() {
-        Employee admin = ayeshaTheAdmin();
+        Employee admin = bishalTheAdmin();
         when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
-        // Ayesha is the only administrator who can still sign in.
+        // Bishal is the only administrator who can still sign in.
         when(employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN)).thenReturn(1L);
 
         /*
@@ -131,7 +131,7 @@ class EmployeeServiceTest {
     @Test
     @DisplayName("delete() allows archiving an admin while another admin remains")
     void deleteAllowsAdminWhenAnotherRemains() {
-        Employee admin = ayeshaTheAdmin();
+        Employee admin = bishalTheAdmin();
         when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
         when(employeeRepository.countByRoleAndActiveTrueAndDeletedFalse(Role.ADMIN)).thenReturn(2L);
 
@@ -146,7 +146,7 @@ class EmployeeServiceTest {
     @Test
     @DisplayName("delete() refuses to let an admin archive their own account")
     void deleteRefusesSelfArchive() {
-        Employee admin = ayeshaTheAdmin();
+        Employee admin = bishalTheAdmin();
         when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
 
         // Same id in both arguments: the signed-in admin clicked Archive on themselves.
@@ -160,7 +160,7 @@ class EmployeeServiceTest {
     @Test
     @DisplayName("update() refuses to demote the last active admin to EMPLOYEE")
     void updateRefusesDemotingTheLastAdmin() {
-        Employee admin = ayeshaTheAdmin();
+        Employee admin = bishalTheAdmin();
         when(employeeRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin));
         when(employeeRepository.existsByEmailAndIdNot("admin@misl.com", ADMIN_ID)).thenReturn(false);
         when(employeeRepository.existsByEmployeeCodeAndIdNot("ADM001", ADMIN_ID)).thenReturn(false);
@@ -173,7 +173,7 @@ class EmployeeServiceTest {
          */
         EmployeeRequest demotion = new EmployeeRequest();
         demotion.setEmployeeCode("ADM001");
-        demotion.setName("Ayesha Rahman");
+        demotion.setName("Bishal Roy");
         demotion.setEmail("admin@misl.com");
         demotion.setDepartment("Human Resources");
         demotion.setDesignation("HR Manager");
