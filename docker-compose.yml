@@ -80,6 +80,10 @@ services:
       # nothing secret is committed to this repository.
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production-0123456789abcdef}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+
+      # Leave days allowed per employee per calendar year. A company policy, not a
+      # constant, so it is configurable rather than compiled in.
+      LEAVE_ANNUAL_ENTITLEMENT_DAYS: ${LEAVE_ANNUAL_ENTITLEMENT_DAYS:-27}
     ports:
       # Published so the API can be exercised directly with Postman or curl.
       # The frontend does NOT use this - it reaches the backend over the internal

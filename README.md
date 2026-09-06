@@ -87,6 +87,8 @@ docker compose up --build
 | Backend | Java 21, Spring Boot 3.5, Spring Web, Spring Security 6, Spring Data JPA, Hibernate, Bean Validation |
 | Auth | JSON Web Tokens (jjwt 0.12.6), BCrypt password hashing |
 | Database | PostgreSQL 16 |
+| API docs | springdoc-openapi 2.8.14 — Swagger UI generated from the code |
+| Testing | JUnit 5, Mockito, AssertJ (36 unit tests, no Spring context) |
 | Build | Maven (backend), npm / Angular CLI (frontend) |
 | Serving | nginx 1.27 (static bundle + `/api` reverse proxy) |
 | Containers | Docker, Docker Compose |
@@ -401,10 +403,25 @@ the container having started.
 **Persistence.** The `postgres-data` named volume keeps the database across
 `docker compose down`. Use `docker compose down -v` to wipe it and re-seed.
 
-**Configuration** is entirely through environment variables
-(`SPRING_DATASOURCE_URL`, `JWT_SECRET`, …), each with a development default of the
-form `${VAR:-default}`, so the project runs with no `.env` file while still allowing
-every value to be overridden. No real secret is committed to this repository.
+**Configuration** is entirely through environment variables, each with a development
+default of the form `${VAR:-default}`, so the project runs with no `.env` file while
+still allowing every value to be overridden. Copy `.env.example` to `.env` to change
+any of them — `.env` is git-ignored, and **no real secret is committed to this
+repository**.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `POSTGRES_DB` | `leave_tracker` | Database name |
+| `POSTGRES_USER` | `postgres` | Database user |
+| `POSTGRES_PASSWORD` | `postgres` | Database password |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://db:5432/leave_tracker` | JDBC URL — note the host is the **service name** `db` |
+| `JWT_SECRET` | a development placeholder | HMAC-SHA256 signing key; must be ≥ 32 characters |
+| `JWT_EXPIRATION_MS` | `86400000` (24 h) | Token lifetime |
+| `LEAVE_ANNUAL_ENTITLEMENT_DAYS` | `27` | Leave days per employee per calendar year |
+
+The last one is a company policy rather than a constant, so it is configurable instead
+of compiled in — `LEAVE_ANNUAL_ENTITLEMENT_DAYS=20 docker compose up` changes the
+limit without touching any code.
 
 ---
 
